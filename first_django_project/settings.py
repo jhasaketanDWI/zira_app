@@ -77,10 +77,14 @@ INSTALLED_APPS = [
     'corsheaders',
 ]
 
+
 AUTH_USER_MODEL = 'user.User'
 
 
 MIDDLEWARE = [
+     # CORS middleware
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -91,13 +95,13 @@ MIDDLEWARE = [
      # Add here
     'allauth.account.middleware.AccountMiddleware',
 
-    # CORS middleware
-    'corsheaders.middleware.CorsMiddleware',
-    'django.middleware.common.CommonMiddleware',
+   
 ]
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:8000",
+    "http://localhost:5173",
     "http://127.0.0.1:8000",
+    "http://127.0.0.1:5173",
 ]
 
 
@@ -139,10 +143,10 @@ WSGI_APPLICATION = 'first_django_project.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'test_app',
+        'NAME': 'jira',
         'HOST': 'localhost',
         'USER': 'root',
-        'PASSWORD': 'root',
+        'PASSWORD': 'Farhaan7861@',
     }
 }
 

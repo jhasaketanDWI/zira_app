@@ -26,8 +26,10 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def list(self, request, *args, **kwargs):
-        user_projects = Project.objects.filter(projectmember__user=request.user).distinct().order_by("-id")
-        
+        user_projects = Project.objects.filter(
+            projectmember__user=request.user
+        ).distinct().order_by("-id")
+
         grouped = {
             "planned": [],
             "ongoing": [],
@@ -38,10 +40,12 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
         for project in user_projects:
             data = self.get_serializer(project).data
-            if project.status.lower() in grouped:
-                grouped[project.status].append(data)
+            status_key = project.status.lower()
+            if status_key in grouped:
+                grouped[status_key].append(data)
 
         return Response(grouped)
+
 
 
 class ProjectMemberViewSet(viewsets.ModelViewSet):
