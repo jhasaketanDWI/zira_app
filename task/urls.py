@@ -28,3 +28,36 @@ urlpatterns = [
 
 
 
+# # task/urls.py
+
+# from rest_framework_nested import routers
+# from .views import EpicViewSet, SprintViewSet, StatusViewSet, TaskViewSet, TagViewSet, TicketViewSet
+
+# # router global resources not tied to a specific project
+# router = routers.DefaultRouter()
+# router.register(r'statuses', StatusViewSet, basename='status')
+
+# # This function will be called from your project's main urls.py
+# def get_project_nested_routers(project_router):
+#     """
+#     Registers task-related routes that are nested under a project.
+#     Generates URLs like:
+#     - /projects/{project_pk}/tasks/
+#     - /projects/{project_pk}/sprints/
+#     - /projects/{project_pk}/sprints/{sprint_pk}/tickets/
+#     """
+    
+#     project_router.register(r'epics', EpicViewSet, basename='project-epics')
+#     project_router.register(r'tags', TagViewSet, basename='project-tags')
+#     project_router.register(r'tasks', TaskViewSet, basename='project-tasks')
+    
+#     # Create a router for sprints nested under a project
+#     sprints_router = routers.NestedSimpleRouter(project_router, r'sprints', lookup='sprint')
+#     # Nest tickets under the sprints router
+#     sprints_router.register(r'tickets', TicketViewSet, basename='sprint-tickets')
+    
+#     # Register the main sprints endpoint under the project
+#     project_router.register(r'sprints', SprintViewSet, basename='project-sprints')
+
+#     # Return both routers so they can be included in the main URL patterns
+#     return project_router, sprints_router

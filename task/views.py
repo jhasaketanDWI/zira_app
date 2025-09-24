@@ -1,5 +1,6 @@
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from .models import( Epic, Sprint, Ticket, Task, Tag, Status as StatusModel)
 from rest_framework import viewsets,status
@@ -11,8 +12,14 @@ from .serializers import(
          SprintSerializer,
          TicketSerializer,
             TagSerializer,
-                TaskSerializer, StatusSerializer, TaskStatusUpdateSerializer
-     )
+                TaskSerializer, StatusSerializer, TaskStatusUpdateSerializer,
+                TaskAssigneesUpdateSerializer, TaskDescriptionUpdateSerializer,
+                TaskSubtaskUpdateSerializer, TaskDueDateUpdateSerializer,
+                TaskStoryPointsUpdateSerializer, TaskPriorityUpdateSerializer,
+                ActivitySerializer
+                )
+                
+     
 
 
 class EpicViewSet(viewsets.ModelViewSet):
@@ -131,6 +138,15 @@ class TaskViewSet(viewsets.ModelViewSet):
     """
     queryset = Task.objects.all().order_by('-id')
     serializer_class = TaskSerializer
+ # --- Helper method for partial updates ---
+    def _update_task_field(self, request, pk, serializer_class):
+        task = self.get_object()
+        check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can update specific fields but it should be done by project owner only
+        
+        serializer = serializer_class(task, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(TaskSerializer(task, context={'request': request}).data, status=status.HTTP_200_OK)
 
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
@@ -187,6 +203,110 @@ class TaskViewSet(viewsets.ModelViewSet):
             # Return the full task data for context
             return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    # --- Custom Actions for Partial Updates ---
+    @action(detail=True, methods=['patch'], url_path='status')
+    def update_status(self, request, pk=None):
+        """PATCH request to update only the task's status."""
+        return self._update_task_field(request, pk, TaskStatusUpdateSerializer)
+
+    @action(detail=True, methods=['patch'], url_path='assignees')
+    def update_assignees(self, request, pk=None):
+        """PATCH request to update only the task's assignees."""
+        return self._update_task_field(request, pk, TaskAssigneesUpdateSerializer)
+        
+    @action(detail=True, methods=['patch'], url_path='description')
+    def update_description(self, request, pk=None):
+        """PATCH request to update only the task's description."""
+        return self._update_task_field(request, pk, TaskDescriptionUpdateSerializer)
+
+    @action(detail=True, methods=['patch'], url_path='parent')
+    def set_parent_task(self, request, pk=None):
+        """PATCH request to set/unset a task's parent (making it a subtask)."""
+        return self._update_task_field(request, pk, TaskSubtaskUpdateSerializer)
+
+    @action(detail=True, methods=['patch'], url_path='due-date')
+    def update_due_date(self, request, pk=None):
+        """PATCH request to update only the task's due date."""
+        return self._update_task_field(request, pk, TaskDueDateUpdateSerializer)
+
+    @action(detail=True, methods=['patch'], url_path='story-points')
+    def update_story_points(self, request, pk=None):
+        """PATCH request to update only the task's story points."""
+        return self._update_task_field(request, pk, TaskStoryPointsUpdateSerializer)
+
+    @action(detail=True, methods=['patch'], url_path='priority')
+    def update_priority(self, request, pk=None):
+        """PATCH request to update only the task's priority."""
+        return self._update_task_field(request, pk, TaskPriorityUpdateSerializer)
+    
+    @action(detail=True, methods=['post'], url_path='add-activity')
+    def add_activity(self, request, pk=None):
+        task = self.get_object()
+        serializer = ActivitySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save(task=task)
+        return Response(TaskSerializer(task, context={'request': request}).data)
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+         # Pass the context here too!
+        serializer = self.get_serializer(instance, context={'request': request})
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['get'], url_path='activities')
+    def activities(self, request, pk=None):
+        task = self.get_object()
+        serializer = ActivitySerializer(task.activity_log.all(), many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['put'], url_path='update-activity/(?P<activity_id>[^/.]+)')
+    def update_activity(self, request, pk=None, activity_id=None):
+        task = self.get_object()
+        try:
+            activity = task.activity_log.get(id=activity_id)
+        except Activity.DoesNotExist:
+            return Response({'detail': 'Activity not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        serializer = ActivitySerializer(activity, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['delete'], url_path='delete-activity/(?P<activity_id>[^/.]+)')
+    def delete_activity(self, request, pk=None, activity_id=None):
+        task = self.get_object()
+        try:
+            activity = task.activity_log.get(id=activity_id)
+        except Activity.DoesNotExist:
+            return Response({'detail': 'Activity not found'}, status=status.HTTP_404_NOT_FOUND)
+        
+        activity.delete()
+        return Response({'detail': 'Activity deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    # @action(detail=True, methods=['post'], url_path='add-activity')
+    # def add_activity(self, request, pk=None):
+    #     """
+    #     POST request to add a new entry to the task's activity history.
+    #     """
+    #     task = self.get_object()
+    #     check_project_permission(request.user, task.project, allowed_roles=[])
+
+    #     # 1. Validate the incoming data for the new entry
+    #     entry_serializer = ActivityLogEntrySerializer(data=request.data)
+    #     entry_serializer.is_valid(raise_exception=True)
+
+    #     # 2. Construct the new log entry with server-side data
+    #     new_entry = {
+    #         "user": request.user.get_full_name() or request.user.email,
+    #         "timestamp": timezone.now().isoformat(),
+    #         **entry_serializer.validated_data
+    #     }
+
+    #     # 3. Append the new entry to the existing list and save
+    #     task.activity_history.append(new_entry)
+    #     task.save(update_fields=['activity_history'])
+
+    #     # 4. Return the full, updated task object
+    #     return Response(TaskSerializer(task, context={'request': request}).data)
 
 class StatusViewSet(viewsets.ModelViewSet):
     """

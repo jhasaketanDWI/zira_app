@@ -59,13 +59,16 @@ class Status(AuditBaseModel):
     def __str__(self):
         return self.title
 
+
+
 class Task(AuditBaseModel):
 
     class Priority(models.TextChoices):
         LOW = 'LOW', 'Low'
+        LOWEST = 'LOWEST', 'Lowest'
         MEDIUM = 'MEDIUM', 'Medium'
         HIGH = 'HIGH', 'High'
-        CRITICAL = 'CRITICAL', 'Critical'
+        HIGHEST = 'HIGHEST', 'Highest'
 
     class TaskType(models.TextChoices):
         BUG = 'BUG', 'Bug'
@@ -78,8 +81,9 @@ class Task(AuditBaseModel):
     status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     task_type = models.CharField(max_length=20, choices=TaskType.choices, default=TaskType.FEATURE)
-    # due_date = models.DateTimeField(null=True, blank=True)
-
+    due_date = models.DateField(null=True, blank=True)
+    # Self-referencing key for subtasks
+    parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     # sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True)
     # UPDATED: Added related_name for easier lookups from a sprint instance.
@@ -109,7 +113,8 @@ class Task(AuditBaseModel):
     story_points = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Estimate of effort for the task")
     
     # This field will store a list of events, e.g., [{"user": "x", "timestamp": "y", "type": "status_change", "details": "Moved to In Progress"}]
-    activity_history = models.JSONField(default=list, blank=True, help_text="Stores a log of all activities like history and work logs on this task.")
+    # activity_history = models.JSONField(default=list,null=True, blank=True, help_text="Stores a log of all activities like history and work logs on this task.")
+    # activity_history = models.ManyToManyField(Activity, related_name='assigned_tasks', blank=True)
 
     # ADDED: Generic relation to the existing 'common.Comment' model for the comments feed.
     # This is not a new model, but a link to the generic Comment model you likely already have for your project.
@@ -121,7 +126,10 @@ class Task(AuditBaseModel):
     def __str__(self):
         return f"[{self.project.name}] {self.title}"
 
-
+class Activity(AuditBaseModel):
+    task = models.ForeignKey(Task, related_name='activity_log', on_delete=models.CASCADE)
+    type = models.CharField(max_length=50)
+    details = models.TextField()
 class Tag(AuditBaseModel):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)

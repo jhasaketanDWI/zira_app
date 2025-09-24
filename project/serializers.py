@@ -1,4 +1,6 @@
 from rest_framework import serializers
+from testCase.serializers import TestCaseSerializer 
+
 from .models import (
         Project,    
           ProjectMember,
@@ -107,12 +109,14 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
     
     # For tickets, which are linked via sprints, we use a SerializerMethodField.
     tickets = serializers.SerializerMethodField()
+    
+    test_cases = TestCaseSerializer(many=True, read_only=True)
 
     class Meta:
         model = Project
         fields = [
             'id', 'name', 'description', 'status', 'owner', 'created_at', 'updated_at',
-            'members', 'epics', 'sprints', 'tasks', 'tickets'
+            'members', 'epics', 'sprints', 'tasks', 'tickets','test_cases'
         ]
 
     def get_tickets(self, project_instance):

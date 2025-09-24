@@ -1,7 +1,7 @@
 from django.core.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework import status
-
+from django.db.models import Q
 from .models import( Project,ProjectMember)
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
@@ -17,7 +17,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
         # Use the detailed serializer for the 'retrieve' action
         if self.action == 'retrieve':
                 return ProjectDetailSerializer
-        return super().get_serializer_class()
+        # return super().get_serializer_class()
+        return ProjectSerializer
+    def get_queryset(self):
+        user=self.request.user
+        # Filter projects where the user is the owner OR is listed as a project member.
+        # The '.distinct()' is important to prevent duplicates if a user is both
+        # the owner and explicitly added as a member.
+        return Project.objects.filter(
+            Q(owner=user) | Q(projectmember__user=user)
+        ).distinct()  
+     
     def perform_create(self, serializer):
         project = serializer.save(owner=self.request.user)
         ProjectMember.objects.create(

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import (Epic,Sprint, Ticket, Status, Task, Tag)
+from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity)
 from project.models import ProjectMember
 # from project.serializers import ProjectMemberSerializer
 
@@ -76,14 +76,27 @@ class StatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = Status
         fields = ['id', 'title']
+class ActivitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Activity
+        fields = ['id', 'task', 'type', 'details', 'created_at', 'updated_at']
+        read_only_fields = ['task', 'created_at', 'updated_at']
 
-class TaskStatusUpdateSerializer(serializers.ModelSerializer):
-    """
-    A specific serializer for only updating the status of a task.
-    """
+
+class TaskSubtaskUpdateSerializer(serializers.ModelSerializer):
+    parent_task = serializers.PrimaryKeyRelatedField(
+        queryset=Task.objects.all(), required=True, allow_null=True
+    )
     class Meta:
         model = Task
-        fields = ['status']
+        fields = ['id','parent_task', 'title', 'status', 'priority', 'task_type']
+
+    def validate_parent_task(self, value):
+        """Prevent circular dependencies."""
+        if value and value.pk == self.instance.pk:
+            raise serializers.ValidationError("A task cannot be its own parent.")
+        return value
+    
 
 class TaskSerializer(serializers.ModelSerializer):
     """
@@ -98,17 +111,28 @@ class TaskSerializer(serializers.ModelSerializer):
     assignees = serializers.PrimaryKeyRelatedField(
         queryset=ProjectMember.objects.all(), many=True, required=False
     )
+    
     # Use PrimaryKeyRelatedField for write operations to assign tags by ID
     tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all(), required=False)
+
+    reporter = serializers.PrimaryKeyRelatedField(
+        queryset=ProjectMember.objects.all()
+    )
+
+
+    subtasks = TaskSubtaskUpdateSerializer(many=True, read_only=True)
+
+    activity_log = ActivitySerializer(many=True, read_only=True)
 
     class Meta:
         model = Task
         fields = [
             'id', 'project', 'sprint', 'epic', 'title', 'description',
             'status', 'priority', 'task_type', 'status_id', 'assignees', 'reporter', 'tags',
-            'created_at', 'updated_at'
+            'due_date', 'story_points', 'subtasks', # Added new fields 'parent_task'
+            'created_at', 'updated_at','activity_log'
         ]
-        read_only_fields = ['created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at', 'subtasks']
 
     def to_representation(self, instance):
         """
@@ -179,3 +203,56 @@ class TaskSerializer(serializers.ModelSerializer):
         if assignees_data is not None:
             instance.assignees.set(assignees_data)
         return instance
+
+class TaskStatusUpdateSerializer(serializers.ModelSerializer):
+    """
+    A specific serializer for only updating the status of a task.
+    """
+    class Meta:
+        model = Task
+        fields = ['status']
+
+class TaskAssigneesUpdateSerializer(serializers.ModelSerializer):
+    assignees = serializers.PrimaryKeyRelatedField(
+        queryset=ProjectMember.objects.all(), many=True, required=False
+    )
+    class Meta:
+        model = Task
+        fields = ['assignees']
+
+class TaskDescriptionUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['description']
+
+
+
+class TaskDueDateUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['due_date']
+
+class TaskStoryPointsUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['story_points']
+
+class TaskPriorityUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Task
+        fields = ['priority']
+
+
+
+# class ActivityLogEntrySerializer(serializers.Serializer):
+#     """
+#     Validates the structure of a new entry being added to the activity history.
+#     """
+#     type = serializers.CharField(max_length=100)
+#     details = serializers.CharField()
+
+#     def validate(self, data):
+#         # You could add more complex validation here if needed
+#         return data
+
+
