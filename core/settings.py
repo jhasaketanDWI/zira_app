@@ -143,21 +143,12 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'test_app',
-        'HOST': 'localhost',
-        'USER': 'root',
-        'PASSWORD': 'Mipaltan@10',
-    }
-}
-"""DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.mysql',
         'NAME': 'jira',
         'HOST': 'localhost',
         'USER': 'root',
         'PASSWORD': 'Farhaan7861@',
     }
-}"""
+}
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
