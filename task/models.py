@@ -1,7 +1,7 @@
 from django.db import models
 from common.models import AuditBaseModel
 from project.models import Project, ProjectMember
-
+from django.contrib.contenttypes.fields import GenericRelation
 class Epic(AuditBaseModel):
     class Status(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -24,6 +24,21 @@ class Sprint(AuditBaseModel):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     start_date = models.DateField()
     end_date = models.DateField()
+    duration = models.PositiveSmallIntegerField(
+        default=2, 
+        null=True, 
+        blank=True, 
+        help_text="Duration in weeks"
+    )
+    #  This field links a Sprint to one Epic.
+    # This creates the "Epic contains Sprints" relationship.
+    epic = models.ForeignKey(
+        Epic,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sprints'  # Allows you to do epic.sprints.all()
+    )
     is_active = models.BooleanField(default=False)
     is_ended = models.BooleanField(default=False)
 
@@ -66,13 +81,42 @@ class Task(AuditBaseModel):
     # due_date = models.DateTimeField(null=True, blank=True)
 
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
-    sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True)
-    epic = models.ForeignKey(Epic, on_delete=models.SET_NULL, null=True, blank=True)
+    # sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True)
+    # UPDATED: Added related_name for easier lookups from a sprint instance.
+    sprint = models.ForeignKey(
+        Sprint, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='tasks' # Allows you to do sprint.tasks.all()
+    )
+    # epic = models.ForeignKey(Epic, on_delete=models.SET_NULL, null=True, blank=True)
+    # This field correctly links a Task to its parent Epic.
+    epic = models.ForeignKey(
+        Epic, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='tasks' # Allows you to do epic.tasks.all()
+    )
+    assignees = models.ManyToManyField(ProjectMember, related_name='assigned_tasks', blank=True)
 
-    assignee = models.ForeignKey(ProjectMember, related_name='assigned_tasks', on_delete=models.SET_NULL, null=True,
-                                 blank=True)
     reporter = models.ForeignKey(ProjectMember, related_name='reported_tasks', on_delete=models.SET_NULL, null=True,
+    
                                  blank=True)
+    # ADDED: A way to link 'Connected work items' together. This does not create a new model.
+    connected_items = models.ManyToManyField('self', blank=True, symmetrical=False)
+    story_points = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Estimate of effort for the task")
+    
+    # This field will store a list of events, e.g., [{"user": "x", "timestamp": "y", "type": "status_change", "details": "Moved to In Progress"}]
+    activity_history = models.JSONField(default=list, blank=True, help_text="Stores a log of all activities like history and work logs on this task.")
+
+    # ADDED: Generic relation to the existing 'common.Comment' model for the comments feed.
+    # This is not a new model, but a link to the generic Comment model you likely already have for your project.
+    comments = GenericRelation('common.Comment', related_query_name='task')
+
+    tags = models.ManyToManyField('Tag', through='TaskTag', related_name='tasks', blank=True)
+
 
     def __str__(self):
         return f"[{self.project.name}] {self.title}"

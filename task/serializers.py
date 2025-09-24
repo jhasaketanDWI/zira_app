@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from .models import (Epic,Sprint, Ticket, Status, Task, Tag)
-
+from project.models import ProjectMember
+# from project.serializers import ProjectMemberSerializer
 
 
 class EpicSerializer(serializers.ModelSerializer):
@@ -94,7 +95,9 @@ class TaskSerializer(serializers.ModelSerializer):
     status_id = serializers.PrimaryKeyRelatedField(
         queryset=Status.objects.all(), source='status', write_only=True
     )
-
+    assignees = serializers.PrimaryKeyRelatedField(
+        queryset=ProjectMember.objects.all(), many=True, required=False
+    )
     # Use PrimaryKeyRelatedField for write operations to assign tags by ID
     tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all(), required=False)
 
@@ -102,7 +105,7 @@ class TaskSerializer(serializers.ModelSerializer):
         model = Task
         fields = [
             'id', 'project', 'sprint', 'epic', 'title', 'description',
-            'status', 'priority', 'task_type', 'status_id', 'assignee', 'reporter', 'tags',
+            'status', 'priority', 'task_type', 'status_id', 'assignees', 'reporter', 'tags',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']
@@ -111,9 +114,12 @@ class TaskSerializer(serializers.ModelSerializer):
         """
         On read operations, serialize the full Tag objects instead of just their IDs.
         """
+        from project.serializers import ProjectMemberSerializer
         representation = super().to_representation(instance)
         # Use TagSerializer to represent the tags
         representation['tags'] = TagSerializer(instance.tags.all(), many=True).data
+        # show full assignee objects on GET requests
+        representation['assignees'] = ProjectMemberSerializer(instance.assignees.all(), many=True).data
         return representation
 
     def validate(self, data):
@@ -123,13 +129,25 @@ class TaskSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"project": "This field is required."})
 
         # Validate that related objects belong to the same project as the task
-        for field_name in ['sprint', 'epic', 'assignee', 'reporter']:
+        for field_name in ['sprint', 'epic', 'reporter']:
             related_obj = data.get(field_name)
             if related_obj and related_obj.project != project:
                 raise serializers.ValidationError({
                     field_name: f"{field_name.capitalize()} must belong to the same project as the task."
                 })
         
+        # Validate many-to-many relations (assignees) 
+        # in serializers.py -> TaskSerializer -> validate()
+        assignees = data.get('assignees')
+        if assignees:
+            for assignee in assignees:
+                # This check is failing
+                if assignee.project != project:
+                    raise serializers.ValidationError({
+                    "assignees": f"Assignee '{assignee.user.get_full_name()}' does not belong to this project."
+                         })
+                    
+                    
         # Validate that tags belong to the same project
         tags = data.get('tags')
         if tags:
@@ -143,15 +161,21 @@ class TaskSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         tags_data = validated_data.pop('tags', [])
+        assignees_data = validated_data.pop('assignees', [])
         task = Task.objects.create(**validated_data)
         if tags_data:
             task.tags.set(tags_data)
+        if assignees_data:
+            task.assignees.set(assignees_data)
         return task
 
     def update(self, instance, validated_data):
         tags_data = validated_data.pop('tags', None)
+        assignees_data = validated_data.pop('assignees', None)
         instance = super().update(instance, validated_data)
 
         if tags_data is not None:
             instance.tags.set(tags_data)
+        if assignees_data is not None:
+            instance.assignees.set(assignees_data)
         return instance

@@ -157,6 +157,36 @@ class TaskViewSet(viewsets.ModelViewSet):
         # Only Owner/PM can delete tasks
         check_project_permission(self.request.user, instance.project)
         instance.delete()
+    
+    # Custom action to create a status
+    @action(detail=False, methods=['post'], url_path='create-status', permission_classes=[IsAuthenticated, IsAdminUser])
+    def create_status(self, request):
+        """
+        Custom action to create a new status.
+        Note: The recommended approach is to use the POST /statuses/ endpoint.
+        """
+        serializer = StatusSerializer(data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    # Custom action to update only the status of a task
+    @action(detail=True, methods=['patch'], url_path='status')
+    def update_task_status(self, request, pk=None):
+        """
+        Custom action to update only the status of a task.
+        """
+        task = self.get_object()
+        # Any project member can update task status
+        check_project_permission(self.request.user, task.project, allowed_roles=[])
+
+        serializer = TaskStatusUpdateSerializer(task, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            # Return the full task data for context
+            return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 class StatusViewSet(viewsets.ModelViewSet):
     """
@@ -164,4 +194,4 @@ class StatusViewSet(viewsets.ModelViewSet):
     """
     queryset = StatusModel.objects.all().order_by('id')
     serializer_class = StatusSerializer
-    permission_classes = [IsAuthenticated, HasFullTaskAccess]
+    permission_classes = [IsAuthenticated, IsAdminUser]  # Only admin users can manage statuses for now or else we can authorized a person having Full Task Access

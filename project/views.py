@@ -1,17 +1,23 @@
 from django.core.exceptions import PermissionDenied
 from rest_framework.response import Response
+from rest_framework import status
 
 from .models import( Project,ProjectMember)
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from common.permissions import check_project_permission
-from .serializers import(ProjectSerializer, ProjectMemberSerializer)
+from .serializers import(ProjectSerializer, ProjectMemberSerializer, ProjectDetailSerializer)
 
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by("-id")
     serializer_class = ProjectSerializer
     permission_classes = [IsAuthenticated] 
 
+    def get_serializer_class(self):
+        # Use the detailed serializer for the 'retrieve' action
+        if self.action == 'retrieve':
+                return ProjectDetailSerializer
+        return super().get_serializer_class()
     def perform_create(self, serializer):
         project = serializer.save(owner=self.request.user)
         ProjectMember.objects.create(

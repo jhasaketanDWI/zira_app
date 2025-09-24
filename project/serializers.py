@@ -4,7 +4,8 @@ from .models import (
           ProjectMember,
 )
 from user.models import User
-       
+from task.serializers import TaskSerializer, TicketSerializer, EpicSerializer, SprintSerializer
+from task.models import Ticket
 
 class ProjectSerializer(serializers.ModelSerializer):
     class Meta:
@@ -87,3 +88,37 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
         
         return data
 
+
+# The new detailed serializer for the project view.
+class ProjectDetailSerializer(serializers.ModelSerializer):
+    """
+    Provides a detailed, nested view of a single Project.
+    """
+    # Use your ProjectMemberSerializer for the 'members' relationship.
+    # We use source='projectmember_set' because you did not set a 'related_name'
+    # on the ProjectMember model's 'project' field.
+    members = ProjectMemberSerializer(many=True, read_only=True, source='projectmember_set')
+    
+    # Add nested serializers for other related items.
+    # Assumes 'related_name' was not set, so we use the Django default '_set'.
+    epics = EpicSerializer(many=True, read_only=True, source='epic_set')
+    sprints = SprintSerializer(many=True, read_only=True, source='sprint_set')
+    tasks = TaskSerializer(many=True, read_only=True) # Assumes related_name='tasks'
+    
+    # For tickets, which are linked via sprints, we use a SerializerMethodField.
+    tickets = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Project
+        fields = [
+            'id', 'name', 'description', 'status', 'owner', 'created_at', 'updated_at',
+            'members', 'epics', 'sprints', 'tasks', 'tickets'
+        ]
+
+    def get_tickets(self, project_instance):
+        """
+        Gathers all tickets from all sprints within the given project.
+        """
+        tickets = Ticket.objects.filter(sprint__project=project_instance)
+        serializer = TicketSerializer(tickets, many=True)
+        return serializer.data

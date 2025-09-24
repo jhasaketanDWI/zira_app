@@ -143,10 +143,10 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'jira',
+        'NAME': 'test_app',
         'HOST': 'localhost',
         'USER': 'root',
-        'PASSWORD': 'Farhaan7861@',
+        'PASSWORD': 'root',
     }
 }
 
