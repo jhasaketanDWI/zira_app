@@ -1,0 +1,11 @@
+django
+djangorestframework
+djangorestframework-simplejwt
+mysqlclient
+django-allauth
+dj-rest-auth
+drf-nested-routers
+django-oauth-toolkit
+social-auth-app-django
+drf-social-oauth2
+django-cors-headers

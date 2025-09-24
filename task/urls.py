@@ -4,7 +4,8 @@ from .views import(
        EpicViewSet, 
       SprintViewSet,
         TicketViewSet,
-        TaskViewSet
+        TaskViewSet,
+        StatusViewSet
     )
 
 
@@ -13,6 +14,7 @@ router = DefaultRouter()
 
 router.register(r"epics", EpicViewSet, basename='epic')
 router.register(r"sprints", SprintViewSet, basename='sprint')
+router.register(r'statuses', StatusViewSet, basename='status')
 router.register(r"tasks", TaskViewSet, basename='task')
 router.register(r"tickets", TicketViewSet, basename='ticket')
 

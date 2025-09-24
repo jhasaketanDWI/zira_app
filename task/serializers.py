@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import (Epic,Sprint, Ticket, Task, Tag)
+from .models import (Epic,Sprint, Ticket, Status, Task, Tag)
 
 
 
@@ -68,20 +68,41 @@ class TagSerializer(serializers.ModelSerializer):
             
         return data
 
+class StatusSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Status model.
+    """
+    class Meta:
+        model = Status
+        fields = ['id', 'title']
+
+class TaskStatusUpdateSerializer(serializers.ModelSerializer):
+    """
+    A specific serializer for only updating the status of a task.
+    """
+    class Meta:
+        model = Task
+        fields = ['status']
 
 class TaskSerializer(serializers.ModelSerializer):
     """
     Serializer for the Task model.
     Handles relationships with Project, Sprint, Epic, Assignee, Reporter, and Tags.
     """
+    # Use nested serializers or StringRelatedField for better readability
+    status = StatusSerializer(read_only=True)
+    status_id = serializers.PrimaryKeyRelatedField(
+        queryset=Status.objects.all(), source='status', write_only=True
+    )
+
     # Use PrimaryKeyRelatedField for write operations to assign tags by ID
     tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all(), required=False)
 
     class Meta:
         model = Task
         fields = [
-            'id', 'project', 'sprint', 'epic', 'title', 'description', 'due_date',
-            'status', 'priority', 'task_type', 'assignee', 'reporter', 'tags',
+            'id', 'project', 'sprint', 'epic', 'title', 'description',
+            'status', 'priority', 'task_type', 'status_id', 'assignee', 'reporter', 'tags',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['created_at', 'updated_at']

@@ -1,5 +1,38 @@
 from rest_framework import serializers
 from .models import User
+#from .models import Invitation
+#from common.permissions import IsOwnerUser
+
+#Serailizers for invitation model (not applied for now, keep it commented)
+"""class InvitationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Invitation
+        fields = ['email', 'role']
+
+    def validate_role(self, value):
+        # Ensure owner cannot invite another owner or admin
+        if value in [User.Role.ADMIN, User.Role.OWNER]:
+            raise serializers.ValidationError("Owners cannot invite Admins or other Owners.")
+        return value
+
+# Serializer for a new user to set their password
+class SetPasswordSerializer(serializers.Serializer):
+    password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    token = serializers.UUIDField(required=True)
+
+# Serializer for an owner to change a user's role
+class UserRoleSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['role']
+        
+# This serializer is for safely displaying user data
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ('id', 'email', 'first_name', 'last_name', 'role', 'created_at')
+        read_only_fields = ('id', 'created_at')
+"""
 
 class UserSerializer(serializers.ModelSerializer):
     """

@@ -1,15 +1,26 @@
 from rest_framework import permissions
 from django.core.exceptions import PermissionDenied
 from project.models import ProjectMember
+from user.models import User
 
 def check_project_permission(user, project, allowed_roles=None):
     """Utility function to check if user has required role for a project."""
-    if allowed_roles is None:
-        allowed_roles = ["OWNER", "PROJECT_MANAGER"]
-
     membership = ProjectMember.objects.filter(user=user, project=project).first()
-    if not membership or membership.role not in allowed_roles:
-        raise PermissionDenied("You do not have permission to perform this action.")
+
+    # This part always runs, checking for basic membership.
+    if not membership:
+        raise PermissionDenied("You are not a member of this project.")
+
+    # If allowed_roles is None, use the default restrictive roles.
+    if allowed_roles is None:
+        default_roles = ["OWNER", "PROJECT_MANAGER"]
+        if membership.role not in default_roles:
+            raise PermissionDenied("You do not have permission to perform this action.")
+
+    # If allowed_roles is a non-empty list, check against it.
+    elif allowed_roles and membership.role not in allowed_roles:
+        raise PermissionDenied("You do not have the required role for this action.")
+
 class IsOwnerOrAdmin(permissions.BasePermission):
     """
     Custom permission to only allow owners of an object or admins to edit it.
@@ -23,3 +34,11 @@ class IsOwnerOrAdmin(permissions.BasePermission):
 
         # Write permissions are only allowed to the owner of the account or an admin.
         return obj == request.user or request.user.is_staff
+
+class IsOwnerUser(permissions.BasePermission):
+    """
+    Custom permission to only allow users with the 'OWNER' role to access a view.
+    """
+    def has_permission(self, request, view):
+        # Check if the user is authenticated and has the role of 'OWNER'
+        return request.user and request.user.is_authenticated and request.user.role == User.Role.OWNER

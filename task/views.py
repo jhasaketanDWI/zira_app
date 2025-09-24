@@ -1,15 +1,17 @@
 from rest_framework.response import Response
 from rest_framework.decorators import action
-from .models import( Epic, Sprint, Ticket, Task, Tag)
+from rest_framework.permissions import IsAuthenticated, IsAdminUser
+from .models import( Epic, Sprint, Ticket, Task, Tag, Status as StatusModel)
 from rest_framework import viewsets,status
 from common.permissions import check_project_permission
+from .permissions import HasFullTaskAccess, CanViewTask
 
 from .serializers import(
        EpicSerializer,
          SprintSerializer,
          TicketSerializer,
             TagSerializer,
-                TaskSerializer,
+                TaskSerializer, StatusSerializer, TaskStatusUpdateSerializer
      )
 
 
@@ -84,15 +86,6 @@ class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
 
     def perform_create(self, serializer):
-        
-        serializer.save()
-
-
-class TicketViewSet(viewsets.ModelViewSet):
-    queryset = Ticket.objects.all()
-    serializer_class = TicketSerializer
-
-    def perform_create(self, serializer):
         # Assuming you want to add permission check here as well
         sprint = serializer.validated_data["sprint"]
         check_project_permission(self.request.user, sprint.project)
@@ -116,13 +109,13 @@ class TagViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
         # Any project member can create tags, adjust permission if needed
-        check_project_permission(self.request.user, project, is_member=True) 
+        check_project_permission(self.request.user, project, allowed_roles=[])
         serializer.save()
 
     def perform_update(self, serializer):
         project = serializer.instance.project
         # Any project member can update tags
-        check_project_permission(self.request.user, project, is_member=True)
+        check_project_permission(self.request.user, project, allowed_roles=[])
         serializer.save()
 
     def perform_destroy(self, instance):
@@ -142,10 +135,10 @@ class TaskViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
         # Any project member can create tasks
-        check_project_permission(self.request.user, project, is_member=True)
+        check_project_permission(self.request.user, project, allowed_roles=[])
         # Set the reporter to the current user's project member profile if not provided
         if 'reporter' not in serializer.validated_data:
-            reporter = self.request.user.project_memberships.filter(project=project).first()
+            reporter = self.request.user.projectmember_set.filter(project=project).first()
             if reporter:
                 serializer.save(reporter=reporter)
             else: # Fallback if user is not a project member (though permission check should prevent this)
@@ -157,10 +150,18 @@ class TaskViewSet(viewsets.ModelViewSet):
     def perform_update(self, serializer):
         project = serializer.instance.project
         # Any project member can update tasks
-        check_project_permission(self.request.user, project, is_member=True)
+        check_project_permission(self.request.user, project, allowed_roles=[])
         serializer.save()
 
     def perform_destroy(self, instance):
         # Only Owner/PM can delete tasks
         check_project_permission(self.request.user, instance.project)
         instance.delete()
+
+class StatusViewSet(viewsets.ModelViewSet):
+    """
+    A ViewSet for handling all operations related to Statuses.
+    """
+    queryset = StatusModel.objects.all().order_by('id')
+    serializer_class = StatusSerializer
+    permission_classes = [IsAuthenticated, HasFullTaskAccess]

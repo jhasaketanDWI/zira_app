@@ -1,8 +1,25 @@
 from django.db import models
+from django.conf import settings
 from common.models import AuditBaseModel
 from django.contrib.auth.models import AbstractUser, BaseUserManager
+import uuid
 
+# Invitations model
+"""class Invitation(models.Model):
+    class Status(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        ACCEPTED = "ACCEPTED", "Accepted"
 
+    email = models.EmailField(unique=True)
+    role = models.CharField(max_length=50)
+    token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
+    status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
+    invited_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='sent_invitations')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Invitation for {self.email}"
+"""
 
 class CustomUserManager(BaseUserManager):
 

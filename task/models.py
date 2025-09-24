@@ -30,13 +30,21 @@ class Sprint(AuditBaseModel):
     def __str__(self):
         return f"{self.project.name} - {self.name}"
 
+class Status(AuditBaseModel):
+    """
+    Represents a status column in the Kanban board (e.g., To Do, In Progress).
+    """
+    title = models.CharField(max_length=100, unique=True)
+    # You can add an 'order' field here later to manage column order on a board
+    # order = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        verbose_name_plural = "Statuses"
+
+    def __str__(self):
+        return self.title
 
 class Task(AuditBaseModel):
-    class Status(models.TextChoices):
-        TODO = 'TODO', 'To Do'
-        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
-        IN_REVIEW = 'IN_REVIEW', 'In Review'
-        DONE = 'DONE', 'Done'
 
     class Priority(models.TextChoices):
         LOW = 'LOW', 'Low'
@@ -52,17 +60,19 @@ class Task(AuditBaseModel):
 
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    due_date = models.DateTimeField(null=True, blank=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.TODO)
+    status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
-    task_type = models.CharField(max_length=20, choices=TaskType.choices)
+    task_type = models.CharField(max_length=20, choices=TaskType.choices, default=TaskType.FEATURE)
+    # due_date = models.DateTimeField(null=True, blank=True)
 
-    project = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
     sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True)
     epic = models.ForeignKey(Epic, on_delete=models.SET_NULL, null=True, blank=True)
 
-    assignee = models.ForeignKey(ProjectMember, related_name='assigned_tasks', on_delete=models.SET_NULL, null=True, blank=True)
-    reporter = models.ForeignKey(ProjectMember, related_name='reported_tasks', on_delete=models.SET_NULL, null=True, blank=True)
+    assignee = models.ForeignKey(ProjectMember, related_name='assigned_tasks', on_delete=models.SET_NULL, null=True,
+                                 blank=True)
+    reporter = models.ForeignKey(ProjectMember, related_name='reported_tasks', on_delete=models.SET_NULL, null=True,
+                                 blank=True)
 
     def __str__(self):
         return f"[{self.project.name}] {self.title}"
