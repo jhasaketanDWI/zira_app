@@ -1,7 +1,6 @@
 from rest_framework import serializers
 from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity)
 from project.models import ProjectMember
-# from project.serializers import ProjectMemberSerializer
 
 
 class EpicSerializer(serializers.ModelSerializer):
@@ -18,57 +17,12 @@ class EpicSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"title": "Epic with this title already exists in this project."})
 
         return data
+class ActivitySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Activity
+        fields = ['id', 'task', 'type', 'details', 'created_at', 'updated_at']
+        read_only_fields = ['task', 'created_at', 'updated_at']
     
-    
-
-class SprintSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Sprint
-        fields = "__all__"
-
-    def validate(self, data):
-        
-        start_date = data.get("start_date")
-        end_date = data.get("end_date")
-
-        if start_date and end_date and start_date > end_date:
-            raise serializers.ValidationError({"end_date": "End date must be after start date."})
-
-        return data
-
-class TicketSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Ticket
-        fields = "__all__"
-
-
-
-class TagSerializer(serializers.ModelSerializer):
-    """
-    Serializer for the Tag model.
-    """
-    class Meta:
-        model = Tag
-        fields = ['id', 'project', 'name', 'color', 'created_at', 'updated_at']
-        read_only_fields = ['created_at', 'updated_at']
-
-    def validate(self, data):
-        # On update, get the project from the instance if not provided
-        project = data.get('project') or (self.instance.project if self.instance else None)
-        name = data.get('name') or (self.instance.name if self.instance else None)
-
-        if not project:
-            raise serializers.ValidationError("Project is required.")
-        
-        # Check for unique tag name within the project
-        query = Tag.objects.filter(project=project, name__iexact=name)
-        if self.instance:
-            query = query.exclude(pk=self.instance.pk)
-        if query.exists():
-            raise serializers.ValidationError({"name": "A tag with this name already exists in this project."})
-            
-        return data
-
 class StatusSerializer(serializers.ModelSerializer):
     """
     Serializer for the Status model.
@@ -76,12 +30,6 @@ class StatusSerializer(serializers.ModelSerializer):
     class Meta:
         model = Status
         fields = ['id', 'title']
-class ActivitySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Activity
-        fields = ['id', 'task', 'type', 'details', 'created_at', 'updated_at']
-        read_only_fields = ['task', 'created_at', 'updated_at']
-
 
 class TaskSubtaskUpdateSerializer(serializers.ModelSerializer):
     parent_task = serializers.PrimaryKeyRelatedField(
@@ -96,8 +44,6 @@ class TaskSubtaskUpdateSerializer(serializers.ModelSerializer):
         if value and value.pk == self.instance.pk:
             raise serializers.ValidationError("A task cannot be its own parent.")
         return value
-    
-
 class TaskSerializer(serializers.ModelSerializer):
     """
     Serializer for the Task model.
@@ -111,13 +57,25 @@ class TaskSerializer(serializers.ModelSerializer):
     assignees = serializers.PrimaryKeyRelatedField(
         queryset=ProjectMember.objects.all(), many=True, required=False
     )
+      # 1. For GET requests (READ): Shows the full tag objects.
+    # tags = TagSerializer(many=True, read_only=True)
     
+    # # 2. For POST/PUT/PATCH requests (WRITE): Accepts a list of tag IDs.
+    # #    The 'source' argument links it back to the 'tags' model field.
+    # tag_ids = serializers.PrimaryKeyRelatedField(
+    #     queryset=Tag.objects.all(), many=True, write_only=True, source='tags', required=False
+    # )
     # Use PrimaryKeyRelatedField for write operations to assign tags by ID
     tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all(), required=False)
 
+    # reporter = serializers.PrimaryKeyRelatedField(
+    #     queryset=ProjectMember.objects.all()
+    # )
     reporter = serializers.PrimaryKeyRelatedField(
-        queryset=ProjectMember.objects.all()
-    )
+    queryset=ProjectMember.objects.all(),
+    required=False, 
+    allow_null=True
+)
 
 
     subtasks = TaskSubtaskUpdateSerializer(many=True, read_only=True)
@@ -133,6 +91,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'created_at', 'updated_at','activity_log'
         ]
         read_only_fields = ['created_at', 'updated_at', 'subtasks']
+
 
     def to_representation(self, instance):
         """
@@ -203,6 +162,63 @@ class TaskSerializer(serializers.ModelSerializer):
         if assignees_data is not None:
             instance.assignees.set(assignees_data)
         return instance
+    
+
+class SprintSerializer(serializers.ModelSerializer):
+    # serialize them using TaskSerializer, and add them to a 'tasks' list.
+    
+    tasks = TaskSerializer(many=True, read_only=True)
+    class Meta:
+        model = Sprint
+        fields = [
+            'id', 'name', 'goal', 'project', 'start_date', 'end_date',
+            'duration', 'epic', 'is_active', 'is_ended', 'tasks'
+        ]
+    def validate(self, data):
+        
+        start_date = data.get("start_date")
+        end_date = data.get("end_date")
+
+        if start_date and end_date and start_date > end_date:
+            raise serializers.ValidationError({"end_date": "End date must be after start date."})
+
+        return data
+
+class TicketSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Ticket
+        fields = "__all__"
+
+
+
+class TagSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Tag model.
+    """
+    class Meta:
+        model = Tag
+        fields = ['id', 'project', 'name', 'color', 'created_at', 'updated_at']
+        read_only_fields = ['created_at', 'updated_at']
+
+    def validate(self, data):
+        # On update, get the project from the instance if not provided
+        project = data.get('project') or (self.instance.project if self.instance else None)
+        name = data.get('name') or (self.instance.name if self.instance else None)
+
+        if not project:
+            raise serializers.ValidationError("Project is required.")
+        
+        # Check for unique tag name within the project
+        query = Tag.objects.filter(project=project, name__iexact=name)
+        if self.instance:
+            query = query.exclude(pk=self.instance.pk)
+        if query.exists():
+            raise serializers.ValidationError({"name": "A tag with this name already exists in this project."})
+            
+        return data
+
+
+    
 
 class TaskStatusUpdateSerializer(serializers.ModelSerializer):
     """
@@ -242,7 +258,28 @@ class TaskPriorityUpdateSerializer(serializers.ModelSerializer):
         model = Task
         fields = ['priority']
 
+class TaskSprintUpdateSerializer(serializers.ModelSerializer):
+    """
+    A specific serializer for only updating the sprint of a task.
+    Allows assigning a task to a sprint or removing it (by passing null).
+    """
+    sprint = serializers.PrimaryKeyRelatedField(
+        queryset=Sprint.objects.all(),
+        required=False,
+        allow_null=True
+    )
 
+    class Meta:
+        model = Task
+        fields = ['sprint']
+
+    def validate_sprint(self, value):
+        """
+        Check that the sprint belongs to the same project as the task.
+        """
+        if value and self.instance and value.project != self.instance.project:
+            raise serializers.ValidationError("The selected sprint must belong to the same project as the task.")
+        return value
 
 # class ActivityLogEntrySerializer(serializers.Serializer):
 #     """

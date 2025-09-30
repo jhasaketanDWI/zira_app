@@ -6,6 +6,8 @@ from .models import( Epic, Sprint, Ticket, Task, Tag, Status as StatusModel)
 from rest_framework import viewsets,status
 from common.permissions import check_project_permission
 from .permissions import HasFullTaskAccess, CanViewTask
+from django.db.models import Q
+
 
 from .serializers import(
        EpicSerializer,
@@ -16,7 +18,8 @@ from .serializers import(
                 TaskAssigneesUpdateSerializer, TaskDescriptionUpdateSerializer,
                 TaskSubtaskUpdateSerializer, TaskDueDateUpdateSerializer,
                 TaskStoryPointsUpdateSerializer, TaskPriorityUpdateSerializer,
-                ActivitySerializer
+                ActivitySerializer,
+                TaskSprintUpdateSerializer
                 )
                 
      
@@ -25,6 +28,13 @@ from .serializers import(
 class EpicViewSet(viewsets.ModelViewSet):
     queryset = Epic.objects.all().order_by("-id")
     serializer_class = EpicSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        # Filter sprints belonging to projects where the user is owner or member
+        return Epic.objects.filter(
+        Q(project__owner=user) | Q(project__projectmember__user=user)
+    ).distinct()
 
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
@@ -42,6 +52,13 @@ class SprintViewSet(viewsets.ModelViewSet):
     queryset = Sprint.objects.all().order_by("-id")
     serializer_class = SprintSerializer
 
+    def get_queryset(self):
+        user = self.request.user
+        # Filter sprints belonging to projects where the user is owner or member
+        return Sprint.objects.filter(
+        Q(project__owner=user) | Q(project__projectmember__user=user)
+    ).distinct()
+
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
         check_project_permission(self.request.user, project)  # Owner/PM only
@@ -52,7 +69,7 @@ class SprintViewSet(viewsets.ModelViewSet):
         check_project_permission(self.request.user, project)
         serializer.save()
 
-    @action(detail=True, methods=["post"])
+    @action(detail=True, methods=["patch"],url_path='activate')
     def activate(self, request, pk=None):
         """Custom action to activate a sprint (only one active sprint per project)."""
         sprint = self.get_object()
@@ -65,7 +82,7 @@ class SprintViewSet(viewsets.ModelViewSet):
 
         return Response({"status": "Sprint activated successfully."}, status=status.HTTP_200_OK)
     
-    @action(detail=True, methods=["put"])
+    @action(detail=True, methods=["patch"],url_path='end')
     def end(self, request, pk=None):
         sprint = self.get_object()
         check_project_permission(request.user, sprint.project)
@@ -73,6 +90,19 @@ class SprintViewSet(viewsets.ModelViewSet):
         if sprint.is_ended:
             return Response({"detail": "Sprint is already ended."}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Find any tasks in this sprint that are NOT in a 'Done' status.
+        # The '__iexact' makes the check case-insensitive.
+        unfinished_tasks = sprint.tasks.exclude(status__title__iexact='Done')
+
+        if unfinished_tasks.exists():
+            # If any unfinished tasks exist, block the action and return an error.
+            return Response(
+                {
+                    "error": "Cannot end sprint while it contains incomplete tasks.",
+                    "detail": "Please move all tasks that are not 'Done' to the backlog or another sprint before proceeding."
+                },
+                status=status.HTTP_400_BAD_REQUEST
+            )
         sprint.is_active = False
         sprint.is_ended = True
         sprint.save()
@@ -87,6 +117,44 @@ class SprintViewSet(viewsets.ModelViewSet):
         tickets = sprint.tickets.all()
         serializer = TicketSerializer(tickets, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'], url_path='dashboard')
+    def dashboard(self, request):   
+        """
+        Provides a structured list of sprints for the dashboard view.
+        You can filter by project by adding a `?project=<project_id>` query parameter.
+        """
+        queryset = self.get_queryset()
+
+        # Get the project ID from the URL (e.g., /dashboard/?project=1)
+        project_id = request.query_params.get('project')
+        
+        # Correctly filter the queryset if a project ID is provided
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+        
+        # 1. Active Sprints: Started but not completed
+        active_sprints = queryset.filter(is_active=True, is_ended=False)
+        
+        # 2. Upcoming Sprints: Created but not started or ended
+        upcoming_sprints = queryset.filter(is_active=False, is_ended=False)
+        
+        # 3. Completed Sprints (is_ended=True)
+        completed_sprints = queryset.filter(is_ended=True)
+        # Serialize the data for the response
+        active_serializer = self.get_serializer(active_sprints, many=True)
+        upcoming_serializer = self.get_serializer(upcoming_sprints, many=True)
+        completed_serializer = self.get_serializer(completed_sprints, many=True)
+
+        
+        # Structure the final JSON response with all three sections
+        response_data = {
+        'active_sprints': active_serializer.data,
+        'upcoming_sprints': upcoming_serializer.data,
+        'completed_sprints': completed_serializer.data
+    }
+        
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
@@ -138,7 +206,14 @@ class TaskViewSet(viewsets.ModelViewSet):
     """
     queryset = Task.objects.all().order_by('-id')
     serializer_class = TaskSerializer
- # --- Helper method for partial updates ---
+
+    def get_queryset(self):
+        user = self.request.user
+        # Filter sprints belonging to projects where the user is owner or member
+        return Task.objects.filter(
+        Q(project__owner=user) | Q(project__projectmember__user=user)
+    ).distinct()
+    # --- Helper method for partial updates ---
     def _update_task_field(self, request, pk, serializer_class):
         task = self.get_object()
         check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can update specific fields but it should be done by project owner only
@@ -150,6 +225,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
+        user = self.request.user
         # Any project member can create tasks
         check_project_permission(self.request.user, project, allowed_roles=[])
         # Set the reporter to the current user's project member profile if not provided
@@ -282,6 +358,19 @@ class TaskViewSet(viewsets.ModelViewSet):
         
         activity.delete()
         return Response({'detail': 'Activity deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
+    
+    @action(detail=True, methods=['patch'], serializer_class=TaskSprintUpdateSerializer)
+    def sprint(self, request, pk=None):
+        """
+        A dedicated endpoint to update the sprint of a task.
+        Accepts PATCH requests to /api/tasks/{id}/sprint/
+        """
+        task = self.get_object()
+        serializer = self.get_serializer(task, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        # After updating, return the full task object
+        return Response(TaskSerializer(task).data)
     # @action(detail=True, methods=['post'], url_path='add-activity')
     # def add_activity(self, request, pk=None):
     #     """

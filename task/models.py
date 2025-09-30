@@ -2,6 +2,7 @@ from django.db import models
 from common.models import AuditBaseModel
 from project.models import Project, ProjectMember
 from django.contrib.contenttypes.fields import GenericRelation
+
 class Epic(AuditBaseModel):
     class Status(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -16,7 +17,6 @@ class Epic(AuditBaseModel):
 
     def __str__(self):
         return self.title
-
 
 class Sprint(AuditBaseModel):
     name = models.CharField(max_length=255)
