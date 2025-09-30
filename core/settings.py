@@ -143,7 +143,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'test_app',
+        'NAME': 'zira_app',
         'HOST': 'localhost',
         'USER': 'root',
         'PASSWORD': 'root',
