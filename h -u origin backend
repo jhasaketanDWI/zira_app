@@ -1,0 +1,26 @@
+* [33meea30cb[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mbackend[m[33m)[m merged all codes
+* [33m96306cd[m[33m ([m[1;31morigin/backend[m[33m)[m Added partial updates apis for backlog
+* [33m89b8b11[m added realtion between sprint and epic, tested task api with functionalities
+* [33m06120d4[m Database engine reverted
+* [33m9046de4[m Modified Tasks model and added .gitignore and requirements.txt files. Renamed first_django_project to core.
+* [33m13b1c8b[m  error fix in project view
+* [33m9f78c5a[m Add files via upload
+* [33m4da1170[m Add files via upload
+* [33mc3867a7[m Delete manage.py
+* [33m7a87d3a[m Delete templates directory
+* [33m000d4ca[m Delete first_django_project directory
+* [33m0d22523[m Delete api directory
+* [33m81e9157[m Update backend branch
+[31m|[m * [33m76c69a6[m[33m ([m[1;31morigin/frontend[m[33m)[m Updated frontend code
+[31m|[m * [33ma2f5060[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Delete manage.py
+[31m|[m * [33mfed401e[m Delete user directory
+[31m|[m * [33m7e55282[m Delete testCase directory
+[31m|[m * [33m52f17b1[m Delete templates directory
+[31m|[m * [33m5595c7f[m Delete task directory
+[31m|[m * [33mc30968d[m Delete project directory
+[31m|[m * [33m19cf637[m Delete first_django_project directory
+[31m|[m * [33m6561967[m Delete common directory
+[31m|[m * [33m634ebbb[m Delete billing directory
+[31m|[m * [33m65fae45[m Add files via upload
+[31m|[m[31m/[m  
+* [33me42b6e7[m Create README.md
