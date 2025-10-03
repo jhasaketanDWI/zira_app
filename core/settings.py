@@ -29,7 +29,7 @@ SECRET_KEY = 'django-insecure-$cmg#q&j=bu096yk(6+a-1*1haq=m45kx3lcfr8miio!k_-a)x
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['f2aaa200dc86.ngrok-free.app', 'localhost', '127.0.0.1']
+ALLOWED_HOSTS = ['localhost', '127.0.0.1']
 
 
 # Application definition
@@ -71,8 +71,9 @@ INSTALLED_APPS = [
      # dj-rest-auth
     'dj_rest_auth',
     'dj_rest_auth.registration',
+    'rest_framework_simplejwt.token_blacklist',
 
-    # 
+
     # CORS headers
     'corsheaders',
 ]
@@ -98,10 +99,10 @@ MIDDLEWARE = [
    
 ]
 CORS_ALLOWED_ORIGINS = [
+    "http://127.0.0.1:5173",
     "http://localhost:8000",
     "http://localhost:5173",
     "http://127.0.0.1:8000",
-    "http://127.0.0.1:5173",
 ]
 
 
@@ -143,7 +144,7 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'test_app',
+        'NAME': 'zira_app',
         'HOST': 'localhost',
         'USER': 'root',
         'PASSWORD': 'root',
@@ -153,6 +154,7 @@ DATABASES = {
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
+        
     ),
 }
 
@@ -192,6 +194,12 @@ USE_I18N = True
 
 USE_TZ = True
 
+REST_USE_JWT = True
+# # In your settings.py file
+
+JWT_AUTH_COOKIE = 'my-app-auth'
+JWT_AUTH_REFRESH_COOKIE = 'my-refresh-token'
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -217,13 +225,13 @@ AUTHENTICATION_BACKENDS = (
 
 
 # Replace with your own keys obtained from Google
-SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '88932842704-t1t74ks2vlqtjom3ccp621dfjdiemtnm.apps.googleusercontent.com'
-SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = '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'
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '804264640043-ml1n9lmpgepsjaefuah76c6784cjli3h.apps.googleusercontent.com'
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = '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'
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'APP': {
-            'client_id': "88932842704-t1t74ks2vlqtjom3ccp621dfjdiemtnm.apps.googleusercontent.com",
-            'secret': "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",
+            'client_id': "804264640043-ml1n9lmpgepsjaefuah76c6784cjli3h.apps.googleusercontent.com",
+            'secret': "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",
             'key': ""
         },
         'SCOPE': ['profile', 'email'],
@@ -237,7 +245,9 @@ SOCIAL_AUTH_GOOGLE_OAUTH2_SCOPE = [
 ]
 
 # Allauth email and username config
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
+ACCOUNT_SIGNUP_FIELDS = ['email*', 'password1*', 'password2*']
 ACCOUNT_USER_MODEL_USERNAME_FIELD = None
-ACCOUNT_EMAIL_REQUIRED = True
-ACCOUNT_USERNAME_REQUIRED = False
-ACCOUNT_AUTHENTICATION_METHOD = 'email'
+# ACCOUNT_EMAIL_REQUIRED = True
+# ACCOUNT_USERNAME_REQUIRED = False
+ACCOUNT_LOGIN_METHODS = {'email'} 

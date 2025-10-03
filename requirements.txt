@@ -9,3 +9,4 @@ django-oauth-toolkit
 social-auth-app-django
 drf-social-oauth2
 django-cors-headers
+pytz

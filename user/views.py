@@ -1,14 +1,13 @@
 from django.utils.decorators import method_decorator
-from django.core.exceptions import PermissionDenied
-from django.shortcuts import render
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
-from rest_framework.decorators import action
 from .models import User
-from rest_framework import viewsets, permissions, generics,viewsets, status, exceptions
+from rest_framework import viewsets, permissions, generics,viewsets, status
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from common.permissions import IsOwnerOrAdmin
-
+from rest_framework_simplejwt.views import TokenObtainPairView
+from .serializers import MyTokenObtainPairSerializer
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import(
      UserSerializer, 
@@ -79,6 +78,28 @@ class AdminSignUpView(generics.CreateAPIView):
         )
 
 
+class MyTokenObtainPairView(TokenObtainPairView):
+    """
+    Custom view for obtaining a token pair that also updates the last_login time.
+    """
+    serializer_class = MyTokenObtainPairSerializer
+
+class LogoutView(APIView):
+    """
+    An endpoint to logout users by blacklisting their refresh token.
+    """
+    permission_classes = (IsAuthenticated,)
+
+    def post(self, request):
+        try:
+            refresh_token = request.data["refresh"]
+            token = RefreshToken(refresh_token)
+            token.blacklist()
+
+            return Response(status=status.HTTP_205_RESET_CONTENT)
+        except Exception as e:
+            return Response(status=status.HTTP_400_BAD_REQUEST)
+
 @method_decorator(csrf_exempt, name='dispatch')
 class GoogleLogin(SocialLoginView):
     """
@@ -90,7 +111,28 @@ class GoogleLogin(SocialLoginView):
     """
     adapter_class = GoogleOAuth2Adapter
     client_class = OAuth2Client
-    # callback_url = "http://localhost:3000"  # Replace with your frontend URL
+    callback_url = "http://localhost:5173"  
+
+    def post(self, request, *args, **kwargs):
+        response = super().post(request, *args, **kwargs)
+        
+        user = self.user
+
+        if user and user.is_authenticated:
+            refresh = RefreshToken.for_user(user)
+            access_token = str(refresh.access_token)
+            refresh_token = str(refresh)
+            email = user.email
+            user_id = user.id
+
+            return Response({
+                'access': access_token,
+                'refresh': refresh_token,
+                'email': email,
+                'user_id': user_id,
+            })
+        return response
+
 
 
 # Entire Invitations model to be applied after reviewing frontend changes (Keep it commented for now)

@@ -3,20 +3,6 @@ from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity)
 from project.models import ProjectMember
 
 
-class EpicSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Epic
-        fields = "__all__"
-
-    def validate(self, data):
-        
-        project = data.get("project") or self.instance.project
-        title = data.get("title") or self.instance.title
-
-        if Epic.objects.filter(project=project, title__iexact=title).exclude(id=self.instance.id if self.instance else None).exists():
-            raise serializers.ValidationError({"title": "Epic with this title already exists in this project."})
-
-        return data
 class ActivitySerializer(serializers.ModelSerializer):
     class Meta:
         model = Activity
@@ -57,29 +43,13 @@ class TaskSerializer(serializers.ModelSerializer):
     assignees = serializers.PrimaryKeyRelatedField(
         queryset=ProjectMember.objects.all(), many=True, required=False
     )
-      # 1. For GET requests (READ): Shows the full tag objects.
-    # tags = TagSerializer(many=True, read_only=True)
-    
-    # # 2. For POST/PUT/PATCH requests (WRITE): Accepts a list of tag IDs.
-    # #    The 'source' argument links it back to the 'tags' model field.
-    # tag_ids = serializers.PrimaryKeyRelatedField(
-    #     queryset=Tag.objects.all(), many=True, write_only=True, source='tags', required=False
-    # )
-    # Use PrimaryKeyRelatedField for write operations to assign tags by ID
     tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all(), required=False)
 
-    # reporter = serializers.PrimaryKeyRelatedField(
-    #     queryset=ProjectMember.objects.all()
-    # )
     reporter = serializers.PrimaryKeyRelatedField(
     queryset=ProjectMember.objects.all(),
     required=False, 
-    allow_null=True
-)
-
-
+    allow_null=True)
     subtasks = TaskSubtaskUpdateSerializer(many=True, read_only=True)
-
     activity_log = ActivitySerializer(many=True, read_only=True)
 
     class Meta:
@@ -90,7 +60,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'due_date', 'story_points', 'subtasks', # Added new fields 'parent_task'
             'created_at', 'updated_at','activity_log'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'subtasks']
+        read_only_fields = ['created_at', 'updated_at', 'subtasks','epic']
 
 
     def to_representation(self, instance):
@@ -163,7 +133,6 @@ class TaskSerializer(serializers.ModelSerializer):
             instance.assignees.set(assignees_data)
         return instance
     
-
 class SprintSerializer(serializers.ModelSerializer):
     # serialize them using TaskSerializer, and add them to a 'tasks' list.
     
@@ -181,6 +150,26 @@ class SprintSerializer(serializers.ModelSerializer):
 
         if start_date and end_date and start_date > end_date:
             raise serializers.ValidationError({"end_date": "End date must be after start date."})
+
+        return data
+
+class EpicSerializer(serializers.ModelSerializer):
+    sprints = SprintSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Epic
+        fields = [
+            'id', 'project', 'title', 'description', 'status', 'sprints'
+            
+        ]
+
+    def validate(self, data):
+        
+        project = data.get("project") or self.instance.project
+        title = data.get("title") or self.instance.title
+
+        if Epic.objects.filter(project=project, title__iexact=title).exclude(id=self.instance.id if self.instance else None).exists():
+            raise serializers.ValidationError({"title": "Epic with this title already exists in this project."})
 
         return data
 
@@ -280,6 +269,31 @@ class TaskSprintUpdateSerializer(serializers.ModelSerializer):
         if value and self.instance and value.project != self.instance.project:
             raise serializers.ValidationError("The selected sprint must belong to the same project as the task.")
         return value
+    
+    def update(self, instance, validated_data):
+        """
+        This method is called when serializer.save() is executed on an existing instance.
+        We override it to add our custom epic-update logic.
+        """
+        # 'instance' is the task object being updated.
+        # 'validated_data' contains the validated sprint object or None.
+        new_sprint = validated_data.get('sprint', instance.sprint)
+        
+        # Determine the new epic based on the new sprint.
+        new_epic = None
+        if new_sprint:
+            # If the new sprint has an associated epic, we'll use it.
+            # If not, new_epic will correctly remain None.
+            new_epic = new_sprint.epic
+
+        # Update both the sprint and epic fields on the task instance.
+        instance.sprint = new_sprint
+        instance.epic = new_epic
+        
+        # Save the changes to the database.
+        instance.save()
+        
+        return instance
 
 # class ActivityLogEntrySerializer(serializers.Serializer):
 #     """

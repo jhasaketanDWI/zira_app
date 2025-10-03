@@ -7,6 +7,8 @@ from .views import(
      GoogleLogin,
      UserSignUpView,
     AdminSignUpView,
+    MyTokenObtainPairView,
+    LogoutView,
     )
 # from .views import InviteUserView, SetPasswordView, UserRoleUpdateView <- Uncomment after implementing Invitaitons model
 
@@ -29,8 +31,9 @@ urlpatterns = [
     path('signup/admin/', AdminSignUpView.as_view(), name='admin-signup'),
     
    # JWT Authentication endpoints
-    path('token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'), 
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    path('logout/', LogoutView.as_view(), name='logout'), 
 
     # Google OAuth API (token-based)
     path('auth/google/', GoogleLogin.as_view(), name='google_login'),

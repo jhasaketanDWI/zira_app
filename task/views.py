@@ -7,6 +7,8 @@ from rest_framework import viewsets,status
 from common.permissions import check_project_permission
 from .permissions import HasFullTaskAccess, CanViewTask
 from django.db.models import Q
+from django.db import transaction
+
 
 
 from .serializers import(
@@ -366,36 +368,13 @@ class TaskViewSet(viewsets.ModelViewSet):
         Accepts PATCH requests to /api/tasks/{id}/sprint/
         """
         task = self.get_object()
+        
+        #check_project_permission(request.user, task.project) # Any project member can update task sprint
         serializer = self.get_serializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         # After updating, return the full task object
         return Response(TaskSerializer(task).data)
-    # @action(detail=True, methods=['post'], url_path='add-activity')
-    # def add_activity(self, request, pk=None):
-    #     """
-    #     POST request to add a new entry to the task's activity history.
-    #     """
-    #     task = self.get_object()
-    #     check_project_permission(request.user, task.project, allowed_roles=[])
-
-    #     # 1. Validate the incoming data for the new entry
-    #     entry_serializer = ActivityLogEntrySerializer(data=request.data)
-    #     entry_serializer.is_valid(raise_exception=True)
-
-    #     # 2. Construct the new log entry with server-side data
-    #     new_entry = {
-    #         "user": request.user.get_full_name() or request.user.email,
-    #         "timestamp": timezone.now().isoformat(),
-    #         **entry_serializer.validated_data
-    #     }
-
-    #     # 3. Append the new entry to the existing list and save
-    #     task.activity_history.append(new_entry)
-    #     task.save(update_fields=['activity_history'])
-
-    #     # 4. Return the full, updated task object
-    #     return Response(TaskSerializer(task, context={'request': request}).data)
 
 class StatusViewSet(viewsets.ModelViewSet):
     """
