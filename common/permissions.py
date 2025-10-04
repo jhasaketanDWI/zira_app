@@ -16,10 +16,12 @@ def check_project_permission(user, project, allowed_roles=None):
         default_roles = ["OWNER", "PROJECT_MANAGER"]
         if membership.role not in default_roles:
             raise PermissionDenied("You do not have permission to perform this action.")
-
+    elif allowed_roles == []:
+        return True
     # If allowed_roles is a non-empty list, check against it.
     elif allowed_roles and membership.role not in allowed_roles:
         raise PermissionDenied("You do not have the required role for this action.")
+    return True
 
 class IsOwnerOrAdmin(permissions.BasePermission):
     """

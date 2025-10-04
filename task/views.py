@@ -2,12 +2,15 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .models import( Epic, Sprint, Ticket, Task, Tag, Status as StatusModel)
+from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag, Status as StatusModel)
 from rest_framework import viewsets,status
 from common.permissions import check_project_permission
 from .permissions import HasFullTaskAccess, CanViewTask
+from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.db import transaction
+from .permissions import IsProjectMember
+
 
 
 
@@ -25,7 +28,23 @@ from .serializers import(
                 )
                 
      
+class ActivityViewSet(viewsets.ModelViewSet):
+    """
+    Manages activities for a specific task.
+    """
+    queryset = Activity.objects.all()
+    serializer_class = ActivitySerializer
+    permission_classes = [IsAuthenticated, IsProjectMember]
+    def get_queryset(self):
+        # Filter activities based on the task_pk from the URL
+        return self.queryset.filter(task_id=self.kwargs['task_pk'])
 
+    def perform_create(self, serializer):
+        # Automatically associate the activity with the correct task
+        task = get_object_or_404(Task, pk=self.kwargs['task_pk'])
+        check_project_permission(self.request.user, task.project, allowed_roles=[])
+
+        serializer.save(task=task, actor=self.request.user)
 
 class EpicViewSet(viewsets.ModelViewSet):
     queryset = Epic.objects.all().order_by("-id")
@@ -208,6 +227,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     """
     queryset = Task.objects.all().order_by('-id')
     serializer_class = TaskSerializer
+    permission_classes = [IsAuthenticated, IsProjectMember]
 
     def get_queryset(self):
         user = self.request.user
@@ -320,35 +340,49 @@ class TaskViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'], url_path='add-activity')
     def add_activity(self, request, pk=None):
+        """Creates a new comment activity for the task."""
         task = self.get_object()
-        serializer = ActivitySerializer(data=request.data)
+        
+        # --- FIX ---
+        # Explicitly use ActivitySerializer and pass the context from the view.
+        context = self.get_serializer_context()
+        serializer = ActivitySerializer(data=request.data, context=context)
+        
         serializer.is_valid(raise_exception=True)
         serializer.save(task=task)
-        return Response(TaskSerializer(task, context={'request': request}).data)
-    def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-         # Pass the context here too!
-        serializer = self.get_serializer(instance, context={'request': request})
-        return Response(serializer.data)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'], url_path='activities')
     def activities(self, request, pk=None):
+        """Fetches the list of all comment activities for the task."""
         task = self.get_object()
-        serializer = ActivitySerializer(task.activity_log.all(), many=True)
+        activities_with_comments = task.activity_log.filter(comment__isnull=False)
+
+        # --- FIX ---
+        # Pass the context here as well for consistency, although it's mainly for write operations.
+        context = self.get_serializer_context()
+        serializer = ActivitySerializer(activities_with_comments, many=True, context=context)
+        
         return Response(serializer.data)
 
     @action(detail=True, methods=['put'], url_path='update-activity/(?P<activity_id>[^/.]+)')
     def update_activity(self, request, pk=None, activity_id=None):
+        """Updates the message of a specific comment."""
         task = self.get_object()
         try:
             activity = task.activity_log.get(id=activity_id)
         except Activity.DoesNotExist:
             return Response({'detail': 'Activity not found'}, status=status.HTTP_404_NOT_FOUND)
         
-        serializer = ActivitySerializer(activity, data=request.data, partial=True)
+        # --- FIX ---
+        # Explicitly use ActivitySerializer and pass the context.
+        context = self.get_serializer_context()
+        serializer = ActivitySerializer(activity, data=request.data, partial=True, context=context)
+
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
+
 
     @action(detail=True, methods=['delete'], url_path='delete-activity/(?P<activity_id>[^/.]+)')
     def delete_activity(self, request, pk=None, activity_id=None):

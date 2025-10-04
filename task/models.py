@@ -2,7 +2,7 @@ from django.db import models
 from common.models import AuditBaseModel
 from project.models import Project, ProjectMember
 from django.contrib.contenttypes.fields import GenericRelation
-
+# from common.models import Comment
 class Epic(AuditBaseModel):
     class Status(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -49,12 +49,13 @@ class Status(AuditBaseModel):
     """
     Represents a status column in the Kanban board (e.g., To Do, In Progress).
     """
+    # project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='statuses')
     title = models.CharField(max_length=100, unique=True)
-    # You can add an 'order' field here later to manage column order on a board
-    # order = models.PositiveIntegerField(default=0)
+    order = models.PositiveIntegerField(default=0,help_text="Order of the column on the board")
 
     class Meta:
         verbose_name_plural = "Statuses"
+        ordering = ['order']
 
     def __str__(self):
         return self.title
@@ -82,11 +83,8 @@ class Task(AuditBaseModel):
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     task_type = models.CharField(max_length=20, choices=TaskType.choices, default=TaskType.FEATURE)
     due_date = models.DateField(null=True, blank=True)
-    # Self-referencing key for subtasks
     parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
-    # sprint = models.ForeignKey(Sprint, on_delete=models.SET_NULL, null=True, blank=True)
-    # UPDATED: Added related_name for easier lookups from a sprint instance.
     sprint = models.ForeignKey(
         Sprint, 
         on_delete=models.SET_NULL, 
@@ -94,8 +92,6 @@ class Task(AuditBaseModel):
         blank=True, 
         related_name='tasks' # Allows you to do sprint.tasks.all()
     )
-    # epic = models.ForeignKey(Epic, on_delete=models.SET_NULL, null=True, blank=True)
-    # This field correctly links a Task to its parent Epic.
     epic = models.ForeignKey(
         Epic, 
         on_delete=models.SET_NULL, 
@@ -108,16 +104,8 @@ class Task(AuditBaseModel):
     reporter = models.ForeignKey(ProjectMember, related_name='reported_tasks', on_delete=models.SET_NULL, null=True,
     
                                  blank=True)
-    # ADDED: A way to link 'Connected work items' together. This does not create a new model.
     connected_items = models.ManyToManyField('self', blank=True, symmetrical=False)
     story_points = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Estimate of effort for the task")
-    
-    # This field will store a list of events, e.g., [{"user": "x", "timestamp": "y", "type": "status_change", "details": "Moved to In Progress"}]
-    # activity_history = models.JSONField(default=list,null=True, blank=True, help_text="Stores a log of all activities like history and work logs on this task.")
-    # activity_history = models.ManyToManyField(Activity, related_name='assigned_tasks', blank=True)
-
-    # ADDED: Generic relation to the existing 'common.Comment' model for the comments feed.
-    # This is not a new model, but a link to the generic Comment model you likely already have for your project.
     comments = GenericRelation('common.Comment', related_query_name='task')
 
     tags = models.ManyToManyField('Tag', through='TaskTag', related_name='tasks', blank=True)
@@ -126,10 +114,35 @@ class Task(AuditBaseModel):
     def __str__(self):
         return f"[{self.project.name}] {self.title}"
 
+from django.conf import settings
+from django.db import models
+# from .base import AuditBaseModel
+# from .task import Task
+
 class Activity(AuditBaseModel):
+    """
+    A multi-purpose model to log activities like comments, status changes, etc.
+    """
     task = models.ForeignKey(Task, related_name='activity_log', on_delete=models.CASCADE)
-    type = models.CharField(max_length=50)
-    details = models.TextField()
+    comment = models.ForeignKey(
+        'common.Comment',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL, 
+        null=True,
+        related_name='activities'
+    )
+    details = models.TextField(help_text="Stores the comment body or details of a change.")
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.actor} on {self.task}"
+    
 class Tag(AuditBaseModel):
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     name = models.CharField(max_length=100)
@@ -140,8 +153,6 @@ class Tag(AuditBaseModel):
 
     def __str__(self):
         return self.name
-
-
 class TaskTag(models.Model):
     task = models.ForeignKey(Task, on_delete=models.CASCADE)
     tag = models.ForeignKey(Tag, on_delete=models.CASCADE)

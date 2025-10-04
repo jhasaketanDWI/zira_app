@@ -1,14 +1,71 @@
 from rest_framework import serializers
 from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity)
 from project.models import ProjectMember
-
+from common.models import Comment
 
 class ActivitySerializer(serializers.ModelSerializer):
+    comment_body = serializers.CharField(write_only=True)
+    comment_details = serializers.SerializerMethodField()
     class Meta:
         model = Activity
-        fields = ['id', 'task', 'type', 'details', 'created_at', 'updated_at']
-        read_only_fields = ['task', 'created_at', 'updated_at']
+        fields = [
+            'id',
+            'task',
+            'actor',
+            'created_at',
+            'comment_details', 
+            'comment_body'     
+        ]
+        read_only_fields = ['task', 'actor', 'created_at']
     
+    def get_comment_details(self, obj):
+        """Return the details of the linked comment."""
+        if obj.comment:
+            return {
+                'id': obj.comment.id,
+                'body': obj.comment.body,
+                'author': obj.comment.author.get_full_name() if obj.comment.author else None,
+                'datetime': obj.comment.created_at # The comment's own timestamp
+            }
+        return None
+   
+    def create(self, validated_data):
+        """
+        Handle the creation of both the Activity and the nested Comment.
+        """
+        # --- THIS IS THE FIX ---
+        # Get the task and comment_body and REMOVE them from the dictionary
+        task = validated_data.pop('task')
+        comment_text = validated_data.pop('comment_body')
+        
+        current_user = self.context['request'].user
+
+        # 1. Create the independent Comment object
+        comment = Comment.objects.create(author=current_user, body=comment_text)
+
+        # 2. Create the Activity that links the Task to the Comment
+        # Now, validated_data does not contain 'task' or 'comment_body',
+        # so it is safe to unpack.
+        activity = Activity.objects.create(
+            comment=comment,
+            actor=current_user,
+            task=task,
+            **validated_data
+        )
+        return activity
+    
+    def update(self, instance, validated_data):
+        """
+        Handle updating the nested Comment's body when the Activity is updated.
+        """
+        if 'comment_body' in validated_data and instance.comment:
+            comment_text = validated_data.pop('comment_body')
+            instance.comment.body = comment_text
+            instance.comment.save()
+
+        return super().update(instance, validated_data)
+
+
 class StatusSerializer(serializers.ModelSerializer):
     """
     Serializer for the Status model.

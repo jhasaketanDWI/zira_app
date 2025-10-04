@@ -95,6 +95,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
      # Add here
     'allauth.account.middleware.AccountMiddleware',
+    'common.middleware.CurrentUserMiddleware'
 
    
 ]

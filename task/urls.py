@@ -1,28 +1,33 @@
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
+from rest_framework_nested import routers
 from .views import(
        EpicViewSet, 
       SprintViewSet,
         TicketViewSet,
         TaskViewSet,
-        StatusViewSet
+        StatusViewSet,
+        TagViewSet,
+        ActivityViewSet
     )
 
-
-
-router = DefaultRouter()
-
-router.register(r"epics", EpicViewSet, basename='epic')
-router.register(r"sprints", SprintViewSet, basename='sprint')
+router = routers.DefaultRouter()
+# Register top-level resources
+router.register(r'epics', EpicViewSet, basename='epic')
+router.register(r'sprints', SprintViewSet, basename='sprint')
 router.register(r'statuses', StatusViewSet, basename='status')
-router.register(r"tasks", TaskViewSet, basename='task')
-router.register(r"tickets", TicketViewSet, basename='ticket')
+router.register(r'tasks', TaskViewSet, basename='task')
+router.register(r'tickets', TicketViewSet, basename='ticket')
+router.register(r'tags', TagViewSet, basename='tag')
 
-# The API URLs are now determined automatically by the router.
+
+# This creates routes like /tasks/{task_pk}/activities/
+tasks_router = routers.NestedDefaultRouter(router, r'tasks', lookup='task')
+tasks_router.register(r'activities', ActivityViewSet, basename='task-activities')
+
 urlpatterns = [
     path('', include(router.urls)),
-    
-  
+    path('', include(tasks_router.urls)),
 ]
 
 
