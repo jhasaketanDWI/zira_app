@@ -9,38 +9,6 @@ from user.models import User
 from task.serializers import TaskSerializer, TicketSerializer, EpicSerializer, SprintSerializer
 from task.models import Ticket
 
-class ProjectSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Project
-        fields = ["id", "name", "description", "status", "owner", "created_at", "updated_at"]
-        read_only_fields = ["owner"]
-
-    def create(self, validated_data):
-        """
-        Ensure that the project is always created with the logged-in user as the owner.
-        """
-        request = self.context.get("request")
-        if request and request.user.is_authenticated:
-            validated_data["owner"] = request.user
-        return Project.objects.create(**validated_data)
-
-    def validate_owner(self, value):
-        """
-        Ensure the request.user is the same as the project owner 
-        when creating or updating.
-        """
-        request = self.context.get("request")
-        if request and request.method == "POST" and value != request.user:
-            raise serializers.ValidationError(
-                "You can only create projects as yourself (owner must be you)."
-            )
-        return value
-    
-# class ProjectMemberSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = ProjectMember
-#         fields = "__all__"
-
 class _UserNestedSerializer(serializers.ModelSerializer):
     """A lightweight, read-only serializer for displaying user details."""
     class Meta:
@@ -90,16 +58,42 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
         
         return data
 
+class ProjectSerializer(serializers.ModelSerializer):
+    owner = _UserNestedSerializer(read_only=True)
+    class Meta:
+        model = Project
+        fields = ["id", "name", "description", "status", "owner", "created_at", "updated_at"]
+        read_only_fields = ["owner"]
+
+    def create(self, validated_data):
+        """
+        Ensure that the project is always created with the logged-in user as the owner.
+        """
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["owner"] = request.user
+        return Project.objects.create(**validated_data)
+
+    def validate_owner(self, value):
+        """
+        Ensure the request.user is the same as the project owner 
+        when creating or updating.
+        """
+        request = self.context.get("request")
+        if request and request.method == "POST" and value != request.user:
+            raise serializers.ValidationError(
+                "You can only create projects as yourself (owner must be you)."
+            )
+        return value
+    
 
 # The new detailed serializer for the project view.
 class ProjectDetailSerializer(serializers.ModelSerializer):
     """
     Provides a detailed, nested view of a single Project.
     """
-    # Use your ProjectMemberSerializer for the 'members' relationship.
-    # We use source='projectmember_set' because you did not set a 'related_name'
-    # on the ProjectMember model's 'project' field.
     members = ProjectMemberSerializer(many=True, read_only=True, source='projectmember_set')
+    owner = _UserNestedSerializer(read_only=True)
     
     # Add nested serializers for other related items.
     # Assumes 'related_name' was not set, so we use the Django default '_set'.
