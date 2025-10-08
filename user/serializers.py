@@ -3,10 +3,6 @@ from .models import User
 from django.utils import timezone
 import pytz
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-#from .models import Invitation
-#from common.permissions import IsOwnerUser
-
-#Serailizers for invitation model (not applied for now, keep it commented)
 """class InvitationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invitation
@@ -48,7 +44,7 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         # We only include safe fields to be returned or updated
-        fields = ('id', 'email', 'first_name', 'last_name', 'role','last_login')
+        fields = ('id', 'email', 'first_name', 'last_name','phone' ,'is_active','role','last_login')
         # 'id' should be read-only.
         read_only_fields = (['id'])
     
@@ -140,3 +136,36 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         user.save(update_fields=['last_login'])
         
         return data
+class AdminUserManagementSerializer(serializers.ModelSerializer):
+    """Serializer for admins to create and update user accounts."""
+    class Meta:
+        model = User
+        fields = ['id', 'email', 'first_name', 'last_name', 'role', 'phone', 'is_active']
+        read_only_fields = ['id']
+
+    def create(self, validated_data):
+        validated_data['is_active'] = validated_data.get('is_active', False)
+        user = User.objects.create(**validated_data)
+        return user    
+
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    new_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+    confirm_new_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
+
+    def validate(self, attrs):
+        if attrs['new_password'] != attrs['confirm_new_password']:
+            raise serializers.ValidationError("New passwords do not match.")
+        return attrs
+
+    def validate_old_password(self, value):
+        user = self.context['request'].user
+        if not user.check_password(value):
+            raise serializers.ValidationError("Old password is incorrect.")
+        return value
+
+    def save(self, **kwargs):
+        user = self.context['request'].user
+        user.set_password(self.validated_data['new_password'])
+        user.save()
+        return user

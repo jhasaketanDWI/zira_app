@@ -9,6 +9,7 @@ from .views import(
     AdminSignUpView,
     MyTokenObtainPairView,
     LogoutView,
+    TeamStatsView
     )
 # from .views import InviteUserView, SetPasswordView, UserRoleUpdateView <- Uncomment after implementing Invitaitons model
 
@@ -37,6 +38,8 @@ urlpatterns = [
 
     # Google OAuth API (token-based)
     path('auth/google/', GoogleLogin.as_view(), name='google_login'),
+
+    path('team/stats/', TeamStatsView.as_view(), name='team-stats'),
 
     path('', include(router.urls)),
 ]

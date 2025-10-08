@@ -60,6 +60,9 @@ class Comment(AuditBaseModel):
     body = models.TextField(
         help_text="The content of the comment."
     )
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, null=True)
+    object_id = models.PositiveIntegerField(null=True)
+    content_object = GenericForeignKey('content_type', 'object_id')
 
     class Meta:
         ordering = ['-created_at'] 

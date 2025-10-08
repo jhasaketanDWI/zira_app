@@ -13,36 +13,37 @@ from .serializers import(
      UserSerializer, 
      UserSignUpSerializer,
      AdminSignUpSerializer,
+     AdminUserManagementSerializer
      )
+from project.models import Project
 
 # These imports are required to set up the Google social login endpoint
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
-
-
 class UserViewSet(viewsets.ModelViewSet):
-
-    queryset = User.objects.filter(is_staff=False)
+    """
+    A ViewSet for OWNERs and ADMINs to view, create, and edit all users.
+    """
+    queryset = User.objects.all().order_by('-id')
+    
+    permission_classes = [IsOwnerOrAdmin]
 
     def get_serializer_class(self):
-        if self.action == 'create':
-            return UserSignUpSerializer
+        if self.action in ['create', 'update', 'partial_update']:
+            return AdminUserManagementSerializer
         return UserSerializer
 
-    def get_permissions(self):
-        if self.action == 'create':
-            self.permission_classes = [AllowAny]
-        elif self.action in ['retrieve', 'update', 'partial_update', 'destroy']:
-            self.permission_classes = [IsOwnerOrAdmin]
-        return super().get_permissions()
-
+    # This create method is useful for returning data in a different format (UserSerializer)
+    # after creating with another (AdminUserManagementSerializer).
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         response_serializer = UserSerializer(user)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+
 
 
 class AdminUserViewSet(viewsets.ModelViewSet):
@@ -73,10 +74,30 @@ class AdminSignUpView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(
-            {"message": "Admin account created successfully. Please login."},
+            {"message": "Owner account created successfully. Please login."},
             status=status.HTTP_201_CREATED
         )
 
+
+
+class TeamStatsView(APIView):
+    permission_classes = [IsAuthenticated, IsAdminUser]
+
+    def get(self, request, *args, **kwargs):
+        total_members = User.objects.count()
+        active_members = User.objects.filter(is_active=True).count()
+        
+        
+        active_projects = Project.objects.exclude(
+            status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
+        ).count()
+
+        stats = {
+            'total_members': total_members,
+            'active_members': active_members,
+            'active_projects': active_projects
+        }
+        return Response(stats)
 
 class MyTokenObtainPairView(TokenObtainPairView):
     """

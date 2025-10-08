@@ -36,7 +36,7 @@ class CustomUserManager(BaseUserManager):
         extra_fields.setdefault('is_staff', True)
         extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
-        extra_fields.setdefault('role', 'ADMIN')  # Default role for superuser
+        extra_fields.setdefault('role', 'OWNER')  # Default role for superuser
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
@@ -57,6 +57,8 @@ class User(AbstractUser, AuditBaseModel):
     username = None
     email = models.EmailField(unique=True)
     role = models.CharField(max_length=50, choices=Role.choices,default=Role.DEVELOPER)
+    phone = models.CharField(max_length=20, blank=True, null=True) # Add this line
+
 
     # Add related_name to resolve clashes with default User model
     groups = models.ManyToManyField(

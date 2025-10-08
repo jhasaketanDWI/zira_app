@@ -342,9 +342,7 @@ class TaskViewSet(viewsets.ModelViewSet):
     def add_activity(self, request, pk=None):
         """Creates a new comment activity for the task."""
         task = self.get_object()
-        
-        # --- FIX ---
-        # Explicitly use ActivitySerializer and pass the context from the view.
+        check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can add comment activity
         context = self.get_serializer_context()
         serializer = ActivitySerializer(data=request.data, context=context)
         
@@ -358,8 +356,6 @@ class TaskViewSet(viewsets.ModelViewSet):
         task = self.get_object()
         activities_with_comments = task.activity_log.filter(comment__isnull=False)
 
-        # --- FIX ---
-        # Pass the context here as well for consistency, although it's mainly for write operations.
         context = self.get_serializer_context()
         serializer = ActivitySerializer(activities_with_comments, many=True, context=context)
         
@@ -373,9 +369,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             activity = task.activity_log.get(id=activity_id)
         except Activity.DoesNotExist:
             return Response({'detail': 'Activity not found'}, status=status.HTTP_404_NOT_FOUND)
-        
-        # --- FIX ---
-        # Explicitly use ActivitySerializer and pass the context.
+        check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can update comment activity
         context = self.get_serializer_context()
         serializer = ActivitySerializer(activity, data=request.data, partial=True, context=context)
 

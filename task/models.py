@@ -2,7 +2,8 @@ from django.db import models
 from common.models import AuditBaseModel
 from project.models import Project, ProjectMember
 from django.contrib.contenttypes.fields import GenericRelation
-# from common.models import Comment
+from django.conf import settings
+
 class Epic(AuditBaseModel):
     class Status(models.TextChoices):
         OPEN = 'OPEN', 'Open'
@@ -82,6 +83,8 @@ class Task(AuditBaseModel):
     status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True, blank=True, related_name='tasks')
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     task_type = models.CharField(max_length=20, choices=TaskType.choices, default=TaskType.FEATURE)
+    
+    
     due_date = models.DateField(null=True, blank=True)
     parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
@@ -114,10 +117,7 @@ class Task(AuditBaseModel):
     def __str__(self):
         return f"[{self.project.name}] {self.title}"
 
-from django.conf import settings
-from django.db import models
-# from .base import AuditBaseModel
-# from .task import Task
+
 
 class Activity(AuditBaseModel):
     """

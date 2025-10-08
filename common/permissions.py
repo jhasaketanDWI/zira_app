@@ -27,7 +27,6 @@ class IsOwnerOrAdmin(permissions.BasePermission):
     """
     Custom permission to only allow owners of an object or admins to edit it.
     """
-
     def has_object_permission(self, request, view, obj):
         # Read permissions are allowed to any request,
         # so we'll always allow GET, HEAD or OPTIONS requests.
@@ -36,6 +35,13 @@ class IsOwnerOrAdmin(permissions.BasePermission):
 
         # Write permissions are only allowed to the owner of the account or an admin.
         return obj == request.user or request.user.is_staff
+    # class IsOwnerOrAdmin(BasePermission):
+    # def has_permission(self, request, view):
+    #     return (
+    #         request.user and
+    #         request.user.is_authenticated and
+    #         request.user.role in [User.Role.OWNER, User.Role.ADMIN]
+    #     )
 
 class IsOwnerUser(permissions.BasePermission):
     """
