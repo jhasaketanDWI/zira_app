@@ -352,6 +352,27 @@ class TaskSprintUpdateSerializer(serializers.ModelSerializer):
         
         return instance
 
+class TaskBoardSerializer(serializers.ModelSerializer):
+    """
+    A lightweight serializer for displaying tasks on the main board view.
+    Optimized to send less data.
+    """
+    # Keep nested serializer for assignees for profile pictures on cards
+    assignees = serializers.SerializerMethodField()
+    reporter_name = serializers.CharField(source='reporter.user.get_full_name', read_only=True)
+    comment_count = serializers.IntegerField(source='comments.count', read_only=True)
+
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'title', 'priority', 'task_type',
+            'assignees', 'reporter_name', 'story_points', 'comment_count'
+        ]
+        read_only_fields = fields
+
+    def get_assignees(self, obj):
+        from project.serializers import ProjectMemberSerializer  
+        return ProjectMemberSerializer(obj.assignees.all(), many=True).data
 # class ActivityLogEntrySerializer(serializers.Serializer):
 #     """
 #     Validates the structure of a new entry being added to the activity history.

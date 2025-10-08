@@ -21,6 +21,7 @@ from project.models import Project
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
+from rest_framework.decorators import action
 class UserViewSet(viewsets.ModelViewSet):
     """
     A ViewSet for OWNERs and ADMINs to view, create, and edit all users.
@@ -34,14 +35,26 @@ class UserViewSet(viewsets.ModelViewSet):
             return AdminUserManagementSerializer
         return UserSerializer
 
-    # This create method is useful for returning data in a different format (UserSerializer)
-    # after creating with another (AdminUserManagementSerializer).
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         response_serializer = UserSerializer(user)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['patch'],url_path='deactivate-user')
+    def deactivate(self, request, pk=None):
+        user = self.get_object()
+        user.is_active = False
+        user.save()
+        return Response({'status': 'user deactivated'})
+
+    @action(detail=True, methods=['patch'],url_path='activate-user')
+    def activate(self, request, pk=None):
+        user = self.get_object()
+        user.is_active = True
+        user.save()
+        return Response({'status': 'user activated'})
 
 
 

@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.db import transaction
 from .permissions import IsProjectMember
+from project.models import Project
 
 
 
@@ -24,9 +25,10 @@ from .serializers import(
                 TaskSubtaskUpdateSerializer, TaskDueDateUpdateSerializer,
                 TaskStoryPointsUpdateSerializer, TaskPriorityUpdateSerializer,
                 ActivitySerializer,
-                TaskSprintUpdateSerializer
+                TaskSprintUpdateSerializer,
+                TaskBoardSerializer
                 )
-                
+
      
 class ActivityViewSet(viewsets.ModelViewSet):
     """
@@ -302,6 +304,56 @@ class TaskViewSet(viewsets.ModelViewSet):
             return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
+    @action(detail=False, methods=['get'], url_path='by-status')
+    def by_status(self, request):
+        """
+        Retrieves all tasks for a given project, grouped by their status.
+        Requires a `project_id` query parameter.
+        Example: /api/tasks/by-status/?project_id=1
+        """
+        project_id = request.query_params.get('project_id')
+
+        if not project_id:
+            return Response(
+                {"error": "A 'project_id' query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            project = Project.objects.get(pk=project_id)
+        except Project.DoesNotExist:
+            return Response(
+                {"error": "Project not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        check_project_permission(request.user, project, allowed_roles=[])
+
+        all_statuses = StatusModel.objects.all().order_by('order')
+
+        project_tasks = Task.objects.filter(project=project).select_related(
+            'status', 'reporter__user'
+        ).prefetch_related(
+            'assignees__user', 'tags'
+        )
+
+        tasks_grouped_by_status = {task.status_id: [] for task in project_tasks}
+        for task in project_tasks:
+            tasks_grouped_by_status[task.status_id].append(task)
+        
+        response_data = []
+        for s in all_statuses:
+            tasks_for_this_status = tasks_grouped_by_status.get(s.id, [])
+            task_serializer = TaskBoardSerializer(tasks_for_this_status, many=True)
+            
+            response_data.append({
+                'id': s.id,
+                'title': s.title,
+                'tasks': task_serializer.data
+            })
+            
+        return Response(response_data, status=status.HTTP_200_OK)
+
     # --- Custom Actions for Partial Updates ---
     @action(detail=True, methods=['patch'], url_path='status')
     def update_status(self, request, pk=None):
