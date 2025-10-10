@@ -2,7 +2,9 @@ from rest_framework import serializers
 from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity)
 from project.models import ProjectMember
 from common.models import Comment
-
+from django.contrib.auth import get_user_model
+# from user.models import User
+User = get_user_model()
 class ActivitySerializer(serializers.ModelSerializer):
     comment_body = serializers.CharField(write_only=True)
     comment_details = serializers.SerializerMethodField()
@@ -87,6 +89,17 @@ class TaskSubtaskUpdateSerializer(serializers.ModelSerializer):
         if value and value.pk == self.instance.pk:
             raise serializers.ValidationError("A task cannot be its own parent.")
         return value
+class _UserNestedSerializer(serializers.ModelSerializer):
+    """A lightweight, read-only serializer for displaying user details."""
+    class Meta:
+        model = User
+        fields = ['id','email']
+class _ProjectMemberNestedSerializer(serializers.ModelSerializer):
+    """A lightweight, read-only serializer for displaying user details."""
+    user=_UserNestedSerializer(read_only=True)
+    class Meta:
+        model = ProjectMember
+        fields = ['id', 'user', 'role']
 class TaskSerializer(serializers.ModelSerializer):
     """
     Serializer for the Task model.
@@ -102,10 +115,11 @@ class TaskSerializer(serializers.ModelSerializer):
     )
     tags = serializers.PrimaryKeyRelatedField(many=True, queryset=Tag.objects.all(), required=False)
 
-    reporter = serializers.PrimaryKeyRelatedField(
-    queryset=ProjectMember.objects.all(),
-    required=False, 
-    allow_null=True)
+    # reporter_id = serializers.PrimaryKeyRelatedField(
+    # queryset=ProjectMember.objects.all(),
+    # required=False, 
+    # allow_null=True)
+    reporter=_ProjectMemberNestedSerializer(read_only=True)
     subtasks = TaskSubtaskUpdateSerializer(many=True, read_only=True)
     activity_log = ActivitySerializer(many=True, read_only=True)
 
