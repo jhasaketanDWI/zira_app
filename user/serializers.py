@@ -43,10 +43,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        # We only include safe fields to be returned or updated
-        fields = ('id', 'email', 'first_name', 'last_name','phone' ,'is_active','role','last_login')
-        # 'id' should be read-only.
-        read_only_fields = (['id'])
+        manager_name = 'objects'
+        fields = ('id', 'email', 'first_name', 'last_name','phone' ,'is_active','role','last_login','is_deleted', 'deleted_at')
+        read_only_fields = (['id','is_deleted', 'deleted_at'])
     
     def get_last_login(self, obj):
         """

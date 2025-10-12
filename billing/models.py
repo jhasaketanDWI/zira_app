@@ -2,9 +2,7 @@ from django.db import models
 from common.models import AuditBaseModel
 from django.conf import settings
 
-# ----------------------------
-# Subscription / Invoice
-# ----------------------------
+
 class SubscriptionPlan(AuditBaseModel):
     name = models.CharField(max_length=100)
     monthly_price = models.DecimalField(max_digits=10, decimal_places=2)

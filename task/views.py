@@ -2,7 +2,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag, Status as StatusModel)
+from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag,ActivityLog, Status as StatusModel)
 from rest_framework import viewsets,status
 from common.permissions import check_project_permission
 from .permissions import HasFullTaskAccess, CanViewTask
@@ -238,6 +238,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         Q(project__owner=user) | Q(project__projectmember__user=user)
     ).distinct()
     # --- Helper method for partial updates ---
+
     def _update_task_field(self, request, pk, serializer_class):
         task = self.get_object()
         check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can update specific fields but it should be done by project owner only
@@ -246,6 +247,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(TaskSerializer(task, context={'request': request}).data, status=status.HTTP_200_OK)
+
 
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
@@ -256,18 +258,38 @@ class TaskViewSet(viewsets.ModelViewSet):
         if 'reporter' not in serializer.validated_data:
             reporter = self.request.user.projectmember_set.filter(project=project).first()
             if reporter:
-                serializer.save(reporter=reporter)
+                task_instance = serializer.save(reporter=reporter)
             else: # Fallback if user is not a project member (though permission check should prevent this)
                  serializer.save()
         else:
             serializer.save()
+        #Track creation activity
+        ActivityLog.objects.create(
+            project=project,
+            task=task_instance,
+            user=self.request.user,
+            action_type='CREATE',
+            details={'title': task_instance.title}
+        )
 
 
     def perform_update(self, serializer):
         project = serializer.instance.project
         # Any project member can update tasks
         check_project_permission(self.request.user, project, allowed_roles=[])
-        serializer.save()
+        original_instance = self.get_object()
+
+        updated_instance=serializer.save()
+
+        
+        #Track updated activities
+        ActivityLog.objects.create(
+            project=project,
+            task=updated_instance,
+            user=self.request.user,
+            action_type='UPDATE',
+            details={'title': updated_instance.title, 'message': 'Task details were updated.'}
+        )
 
     def perform_destroy(self, instance):
         # Only Owner/PM can delete tasks

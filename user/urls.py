@@ -9,7 +9,8 @@ from .views import(
     AdminSignUpView,
     MyTokenObtainPairView,
     LogoutView,
-    TeamStatsView
+    TeamStatsView,
+    UserSoftDeleteAPIView
     )
 # from .views import InviteUserView, SetPasswordView, UserRoleUpdateView <- Uncomment after implementing Invitaitons model
 
@@ -34,7 +35,11 @@ urlpatterns = [
    # JWT Authentication endpoints
     path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'), 
     path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    
+    
     path('logout/', LogoutView.as_view(), name='logout'), 
+    path('user/<int:pk>/delete/', UserSoftDeleteAPIView.as_view(), name='user-soft-delete-api'),
+
 
     # Google OAuth API (token-based)
     path('auth/google/', GoogleLogin.as_view(), name='google_login'),

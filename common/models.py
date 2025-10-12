@@ -4,7 +4,39 @@ from django.utils import timezone
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from common.middleware import get_current_user
-class AuditBaseModel(models.Model):
+from .manager import SoftDeleteManager
+
+class SoftDeleteModel(models.Model):
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
+    
+    objects = SoftDeleteManager() 
+    
+    all_objects = models.Manager() 
+
+    def soft_delete(self):
+        """Marks the instance as deleted."""
+        self.is_deleted = True
+        self.deleted_at = timezone.now()
+        self.save()
+
+    def restore(self):
+        """Restores a soft-deleted instance."""
+        self.is_deleted = False
+        self.deleted_at = None
+        self.save()
+
+    # Override the default delete() method to prevent hard deletion
+    def delete(self, *args, **kwargs):
+        """
+        Instead of a hard delete, we perform a soft delete.
+        """
+        self.soft_delete()
+
+    class Meta:
+        abstract = True
+class AuditBaseModel(SoftDeleteModel):
     """
     An abstract base class model that provides self-updating
     `created_at` and `updated_at` fields, and tracks the user

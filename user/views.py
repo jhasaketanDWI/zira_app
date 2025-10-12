@@ -26,7 +26,7 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     A ViewSet for OWNERs and ADMINs to view, create, and edit all users.
     """
-    queryset = User.objects.all().order_by('-id')
+    queryset = User.objects.all().order_by('-id').filter(is_deleted=False)
     
     permission_classes = [IsOwnerOrAdmin]
 
@@ -133,6 +133,29 @@ class LogoutView(APIView):
             return Response(status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
             return Response(status=status.HTTP_400_BAD_REQUEST)
+
+class UserSoftDeleteAPIView(generics.DestroyAPIView):
+    """
+    API view to soft-delete a user.
+    Only allows DELETE requests.
+    """
+    queryset = User.objects.all()
+    serializer_class = UserSerializer
+    
+    permission_classes = [permissions.IsAdminUser]
+
+    def destroy(self, request, *args, **kwargs):
+        """
+        Overrides the default destroy method to return a custom message.
+        """
+        instance = self.get_object()
+        self.perform_destroy(instance)
+        
+        return Response(
+            {"message": f"User '{instance.email}' was successfully soft-deleted."},
+            status=status.HTTP_200_OK
+        )
+
 
 @method_decorator(csrf_exempt, name='dispatch')
 class GoogleLogin(SocialLoginView):
