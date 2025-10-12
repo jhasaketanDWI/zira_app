@@ -1,13 +1,20 @@
 from rest_framework import serializers
-from .models import User
+from .models import User, Invitation
 from django.utils import timezone
 import pytz
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-"""class InvitationSerializer(serializers.ModelSerializer):
+class InvitationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invitation
         fields = ['email', 'role']
-
+    
+    def validate_email(self, value):
+        """
+        Check if a user with this email already exists.
+        """
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError("A user with this email already exists.")
+        return value
     def validate_role(self, value):
         # Ensure owner cannot invite another owner or admin
         if value in [User.Role.ADMIN, User.Role.OWNER]:
@@ -25,13 +32,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
         model = User
         fields = ['role']
         
-# This serializer is for safely displaying user data
-class UserSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = User
-        fields = ('id', 'email', 'first_name', 'last_name', 'role', 'created_at')
-        read_only_fields = ('id', 'created_at')
-"""
+
 
 class UserSerializer(serializers.ModelSerializer):
     """

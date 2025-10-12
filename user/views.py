@@ -1,7 +1,7 @@
 from django.utils.decorators import method_decorator
 from rest_framework.response import Response
 from django.views.decorators.csrf import csrf_exempt
-from .models import User
+from .models import User,Invitation
 from rest_framework import viewsets, permissions, generics,viewsets, status
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from common.permissions import IsOwnerOrAdmin
@@ -9,11 +9,16 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import MyTokenObtainPairSerializer
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.conf import settings
+from django.core.mail import send_mail
+from common.permissions import IsOwnerUser,IsOwnerOrAdmin
+from django.utils.crypto import get_random_string
 from .serializers import(
      UserSerializer, 
      UserSignUpSerializer,
      AdminSignUpSerializer,
-     AdminUserManagementSerializer
+     AdminUserManagementSerializer,
+     InvitationSerializer, SetPasswordSerializer, UserRoleSerializer
      )
 from project.models import Project
 
@@ -22,13 +27,14 @@ from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
 from rest_framework.decorators import action
+
 class UserViewSet(viewsets.ModelViewSet):
     """
     A ViewSet for OWNERs and ADMINs to view, create, and edit all users.
     """
     queryset = User.objects.all().order_by('-id').filter(is_deleted=False)
     
-    permission_classes = [IsOwnerOrAdmin]
+    permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -193,28 +199,30 @@ class GoogleLogin(SocialLoginView):
 
 
 # Entire Invitations model to be applied after reviewing frontend changes (Keep it commented for now)
-'''
+
 class InviteUserView(generics.CreateAPIView):
     """
     API endpoint for an OWNER to invite a new user.
     POST /api/users/invite/
     """
     serializer_class = InvitationSerializer
-    permission_classes = [IsOwnerUser] # Only allows OWNERS
+    permission_classes = [IsOwnerOrAdmin] # Only allows OWNERS
 
     def perform_create(self, serializer):
         # The owner sending the invite is the 'invited_by' user
         invitation = serializer.save(invited_by=self.request.user)
-
+        # Generate a random dummy password
+        temporary_password = get_random_string(length=12)
         # Create a user account for the invited email, with no password
         User.objects.create_user(
             email=invitation.email,
+            password=None,
             role=invitation.role,
             is_active=False # User remains inactive until password is set
         )
 
         # Send an invitation email (this will print to console in development)
-        invitation_link = f"http://yourapp.com/initialize-account?token={invitation.token}"
+        invitation_link = f"http://localhost:5173/set-password?token={invitation.token}"
         send_mail(
             subject='You have been invited to join test-app!',
             message=f"Hello, Please click the link to set your password and activate your account: {invitation_link}",
@@ -254,16 +262,6 @@ class SetPasswordView(generics.GenericAPIView):
             return Response({"error": "Invalid token or user not found."}, status=status.HTTP_400_BAD_REQUEST)
 
 
-class UserViewSet(viewsets.ReadOnlyModelViewSet):
-    """
-    A viewset for viewing user accounts.
-    - GET (list): Lists all users (for authenticated users).
-    - GET (retrieve): Retrieves a specific user's details.
-    """
-    queryset = User.objects.all()
-    serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated] # Only logged-in users can see user lists
-
 
 class UserRoleUpdateView(generics.UpdateAPIView):
     """
@@ -272,5 +270,4 @@ class UserRoleUpdateView(generics.UpdateAPIView):
     """
     queryset = User.objects.all()
     serializer_class = UserRoleSerializer
-    permission_classes = [IsOwnerUser] # Only allows OWNERS
-'''
+    permission_classes = [IsOwnerUser,IsAuthenticated] # Only allows OWNERS
