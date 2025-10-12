@@ -3,6 +3,7 @@ from django.conf import settings
 from common.models import AuditBaseModel
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 import uuid
+from common.manager import SoftDeleteManager
 
 # Invitations model
 """class Invitation(models.Model):
@@ -21,7 +22,7 @@ import uuid
         return f"Invitation for {self.email}"
 """
 
-class CustomUserManager(BaseUserManager):
+class CustomUserManager(BaseUserManager,SoftDeleteManager):
 
     def create_user(self, email, password, **extra_fields):
         if not email:

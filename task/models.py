@@ -84,7 +84,8 @@ class Task(AuditBaseModel):
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     task_type = models.CharField(max_length=20, choices=TaskType.choices, default=TaskType.FEATURE)
     
-    
+    completed_at = models.DateTimeField(null=True, blank=True) 
+
     due_date = models.DateField(null=True, blank=True)
     parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
@@ -178,3 +179,20 @@ class Ticket(AuditBaseModel):
     def __str__(self):
         return f"{self.title} ({self.status})"
 
+
+
+class ActivityLog(AuditBaseModel):
+    ACTION_TYPES = [
+        ('CREATE', 'Created'),
+        ('UPDATE', 'Updated'),
+        ('COMMENT', 'Commented'),
+    ]
+    
+    project = models.ForeignKey('project.Project', on_delete=models.CASCADE, related_name='activities')
+    task = models.ForeignKey('task.Task', on_delete=models.CASCADE, null=True, blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+    details = models.JSONField(default=dict)
+
+    class Meta:
+        ordering = ['-created_at'] # Order by creation time from AuditBaseModel

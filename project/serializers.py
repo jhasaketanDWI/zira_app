@@ -1,5 +1,6 @@
 from rest_framework import serializers
 from testCase.serializers import TestCaseSerializer 
+from task.models import Ticket, ActivityLog
 
 from .models import (
         Project,    
@@ -120,3 +121,13 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         tickets = Ticket.objects.filter(sprint__project=project_instance)
         serializer = TicketSerializer(tickets, many=True)
         return serializer.data
+    
+
+class ActivityLogSerializer(serializers.ModelSerializer):
+    # Add nested serializers if you want user/task details
+    user_email = serializers.EmailField(source='user.email', read_only=True)
+    task_title = serializers.CharField(source='task.title', read_only=True)
+
+    class Meta:
+        model = ActivityLog
+        fields = ['id', 'action_type', 'details', 'created_at', 'user_email', 'task_title']

@@ -6,8 +6,12 @@ from .models import( Project,ProjectMember)
 from rest_framework import viewsets
 from rest_framework.permissions import IsAuthenticated
 from common.permissions import check_project_permission
-from .serializers import(ProjectSerializer, ProjectMemberSerializer, ProjectDetailSerializer)
-
+from .serializers import(ProjectSerializer, ProjectMemberSerializer, ProjectDetailSerializer,ActivityLogSerializer)
+from rest_framework.views import APIView
+from task.models import Task, ActivityLog 
+from django.utils import timezone
+from datetime import timedelta
+from django.db.models import Count
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by("-id")
     serializer_class = ProjectSerializer
@@ -81,4 +85,49 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         check_project_permission(self.request.user, instance.project)
         instance.delete()
+class ProjectSummaryView(APIView):
+    permission_classes = [IsAuthenticated]
 
+    def get(self, request, project_id, format=None):
+        # Ensure the user is a member of the project they are requesting
+        if not ProjectMember.objects.filter(project_id=project_id, user=request.user).exists():
+            return Response({"error": "You do not have permission to view this project."}, status=status.HTTP_403_FORBIDDEN)
+
+        # 1. Date range calculations
+        today = timezone.now()
+        seven_days_ago = today - timedelta(days=7)
+
+        # Base queryset for tasks in the current project
+        project_tasks = Task.objects.filter(project_id=project_id)
+
+        # 2. Summary Card Logic
+        # For 'completed', we assume a status named 'Done'. Adjust if yours is different.
+        completed_tasks_last_7_days = project_tasks.filter(
+            status__title__iexact='Done', 
+            updated_at__gte=seven_days_ago # Using updated_at as a proxy for completed_at
+        ).count()
+
+        summary_cards = {
+            'completed': completed_tasks_last_7_days,
+            'created': project_tasks.filter(created_at__gte=seven_days_ago).count(),
+            'updated': project_tasks.filter(updated_at__gte=seven_days_ago).count(),
+            'due_soon': project_tasks.filter(due_date__range=[today, today + timedelta(days=3)]).exclude(status__title__iexact='Done').count()
+        }
+
+        # 3. Status Overview Logic
+        status_overview = project_tasks.values('status__title').annotate(count=Count('id')).order_by('status__title')
+
+        # 4. Recent Activity Logic
+        recent_activities = ActivityLog.objects.filter(project_id=project_id)[:10] # Get last 10 activities
+
+        # 5. Assemble the final response
+        response_data = {
+            "summary_cards": summary_cards,
+            "status_overview": {
+                "total": project_tasks.count(),
+                "breakdown": list(status_overview)
+            },
+            "recent_activity": ActivityLogSerializer(recent_activities, many=True).data
+        }
+
+        return Response(response_data)
