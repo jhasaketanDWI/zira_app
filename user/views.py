@@ -198,8 +198,6 @@ class GoogleLogin(SocialLoginView):
 
 
 
-# Entire Invitations model to be applied after reviewing frontend changes (Keep it commented for now)
-
 class InviteUserView(generics.CreateAPIView):
     """
     API endpoint for an OWNER to invite a new user.
@@ -209,11 +207,8 @@ class InviteUserView(generics.CreateAPIView):
     permission_classes = [IsOwnerOrAdmin] # Only allows OWNERS
 
     def perform_create(self, serializer):
-        # The owner sending the invite is the 'invited_by' user
         invitation = serializer.save(invited_by=self.request.user)
-        # Generate a random dummy password
         temporary_password = get_random_string(length=12)
-        # Create a user account for the invited email, with no password
         User.objects.create_user(
             email=invitation.email,
             password=None,
@@ -221,7 +216,6 @@ class InviteUserView(generics.CreateAPIView):
             is_active=False # User remains inactive until password is set
         )
 
-        # Send an invitation email (this will print to console in development)
         invitation_link = f"http://localhost:5173/set-password?token={invitation.token}"
         send_mail(
             subject='You have been invited to join test-app!',
@@ -229,6 +223,14 @@ class InviteUserView(generics.CreateAPIView):
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[invitation.email],
         )
+        # response_data = {
+        #     'email': invitation.email,
+        #     'role': invitation.role,
+        #     'token': str(invitation.token) 
+        # }
+
+        # headers = self.get_success_headers(serializer.data)
+        # return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
 class SetPasswordView(generics.GenericAPIView):
     """
@@ -271,3 +273,30 @@ class UserRoleUpdateView(generics.UpdateAPIView):
     queryset = User.objects.all()
     serializer_class = UserRoleSerializer
     permission_classes = [IsOwnerUser,IsAuthenticated] # Only allows OWNERS
+
+class UserRolesView(APIView):
+    """
+    An endpoint to get the list of available roles for inviting users.
+    The list is filtered based on the role of the user making the request.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        all_roles = User.Role.choices
+        user_role = getattr(request.user, 'role', None)
+
+        if user_role == User.Role.ADMIN:
+            invitable_roles = [role for role in all_roles if role[0] != User.Role.ADMIN]
+            return Response(invitable_roles)
+
+        if user_role == User.Role.OWNER:
+            invitable_roles = [role for role in all_roles if role[0] not in [User.Role.ADMIN, User.Role.OWNER]]
+            return Response(invitable_roles)
+
+        if user_role == User.Role.MANAGER:
+            invitable_roles = [role for role in all_roles if role[0] in [User.Role.DEVELOPER, User.Role.TESTER]]
+            return Response(invitable_roles)
+
+        return Response([])
+
+

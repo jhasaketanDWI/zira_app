@@ -10,6 +10,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.db import transaction
 from .permissions import IsProjectMember
+from rest_framework import serializers
 from project.models import Project
 
 
@@ -234,9 +235,15 @@ class TaskViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         # Filter sprints belonging to projects where the user is owner or member
-        return Task.objects.filter(
+        queryset = Task.objects.filter(
         Q(project__owner=user) | Q(project__projectmember__user=user)
     ).distinct()
+         # Check if the URL is nested under a project
+        if 'project_pk' in self.kwargs:
+            project_pk = self.kwargs['project_pk']
+            queryset = queryset.filter(project_id=project_pk)
+
+        return queryset
     # --- Helper method for partial updates ---
 
     def _update_task_field(self, request, pk, serializer_class):
@@ -250,19 +257,32 @@ class TaskViewSet(viewsets.ModelViewSet):
 
 
     def perform_create(self, serializer):
-        project = serializer.validated_data["project"]
-        user = self.request.user
+        project = None
+        # If called from a nested URL, get the project from the URL
+        if 'project_pk' in self.kwargs:
+            project_pk = self.kwargs['project_pk']
+            project = get_object_or_404(Project, pk=project_pk)
+        else:
+            # Otherwise, get it from the serializer's validated data
+            project = serializer.validated_data.get('project')
+
+        if not project:
+            raise serializers.ValidationError({"project": "Project not found or not provided."})
+
         # Any project member can create tasks
         check_project_permission(self.request.user, project, allowed_roles=[])
+        task_instance = None
         # Set the reporter to the current user's project member profile if not provided
         if 'reporter' not in serializer.validated_data:
             reporter = self.request.user.projectmember_set.filter(project=project).first()
             if reporter:
                 task_instance = serializer.save(reporter=reporter)
             else: # Fallback if user is not a project member (though permission check should prevent this)
-                 serializer.save()
+                task_instance = serializer.save(project=project)
+
         else:
-            serializer.save()
+            task_instance = serializer.save(project=project)
+
         #Track creation activity
         ActivityLog.objects.create(
             project=project,

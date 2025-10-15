@@ -6,7 +6,7 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 class InvitationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invitation
-        fields = ['email', 'role']
+        fields = ['email', 'role', 'token']
     
     def validate_email(self, value):
         """

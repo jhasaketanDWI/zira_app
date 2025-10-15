@@ -13,7 +13,8 @@ from .views import(
     UserSoftDeleteAPIView,
     InviteUserView,
     SetPasswordView, 
-    UserRoleUpdateView
+    UserRoleUpdateView,
+    UserRolesView,
     )
 
 from rest_framework_simplejwt.views import (
@@ -57,6 +58,8 @@ urlpatterns = [
 
     # URL for an OWNER to change a user's role
     path('users/<int:pk>/change-role/', UserRoleUpdateView.as_view(), name='user-change-role'),
+
+    path('users/available-roles/', UserRolesView.as_view(), name='available-user-roles'),
 
     path('', include(router.urls)),
 ]
