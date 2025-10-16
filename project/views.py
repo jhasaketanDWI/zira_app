@@ -322,6 +322,41 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         else:
             raise PermissionDenied("You do not have permission to remove members from this project.")
         instance.delete()
+# class ManagedTeamMembersView(APIView):
+#     """
+#     An endpoint for a Project Manager to see a unique list of all users
+#     who are members of the projects they manage.
+#     """
+#     permission_classes = [IsAuthenticated]
+
+#     def get(self, request, *args, **kwargs):
+#         current_user = request.user
+
+#         # 1. Find the IDs of all projects where the current user is a Project Manager.
+#         managed_project_ids = ProjectMember.objects.filter(
+#             user=current_user,
+#             role=ProjectMember.Role.PROJECT_MANAGER
+#         ).values_list('project_id', flat=True)
+
+#         if not managed_project_ids.exists():
+#             # If the user manages no projects, return an empty list.
+#             return Response([])
+
+#         # 2. Find the unique IDs of all users who are members of those projects,
+#         #    excluding the manager themselves.
+#         team_member_ids = ProjectMember.objects.filter(
+#             project_id__in=managed_project_ids
+#         ).exclude(
+#             user=current_user
+#         ).values_list('user_id', flat=True).distinct()
+
+#         # 3. Fetch the full User objects for those IDs.
+#         team_members = User.objects.filter(id__in=team_member_ids)
+
+#         # 4. Serialize the user data and return it as the response.
+#         serializer = UserSerializer(team_members, many=True)
+#         return Response(serializer.data)
+
 class ManagedTeamMembersView(APIView):
     """
     An endpoint for a Project Manager to see a unique list of all users
@@ -351,8 +386,10 @@ class ManagedTeamMembersView(APIView):
         ).values_list('user_id', flat=True).distinct()
 
         # 3. Fetch the full User objects for those IDs.
-        team_members = User.objects.filter(id__in=team_member_ids)
-
+        team_members = User.objects.filter(
+            id__in=team_member_ids,
+            role__in=[User.Role.DEVELOPER, User.Role.TESTER]
+        )
         # 4. Serialize the user data and return it as the response.
         serializer = UserSerializer(team_members, many=True)
         return Response(serializer.data)
