@@ -9,9 +9,14 @@ from .permissions import HasFullTaskAccess, CanViewTask
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from django.db import transaction
-from .permissions import IsProjectMember
+from .permissions import IsProjectMember, IsAuthorOrReadOnly
 from rest_framework import serializers
-from project.models import Project
+from project.models import Project, ProjectMember
+from rest_framework import serializers
+from common.models import Comment
+from django.contrib.contenttypes.models import ContentType
+from rest_framework.exceptions import PermissionDenied
+
 
 
 
@@ -27,7 +32,8 @@ from .serializers import(
                 TaskStoryPointsUpdateSerializer, TaskPriorityUpdateSerializer,
                 ActivitySerializer,
                 TaskSprintUpdateSerializer,
-                TaskBoardSerializer
+                TaskBoardSerializer,
+                CommentSerializer
                 )
 
      
@@ -248,6 +254,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def _update_task_field(self, request, pk, serializer_class):
         task = self.get_object()
+        
         check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can update specific fields but it should be done by project owner only
         
         serializer = serializer_class(task, data=request.data, partial=True)
@@ -505,3 +512,43 @@ class StatusViewSet(viewsets.ModelViewSet):
     queryset = StatusModel.objects.all().order_by('id')
     serializer_class = StatusSerializer
     permission_classes = [IsAuthenticated, IsAdminUser]  # Only admin users can manage statuses for now or else we can authorized a person having Full Task Access
+
+
+
+class CommentViewSet(viewsets.ModelViewSet):
+    """
+    Manages CRUD operations for comments on a specific task.
+    Nested under /tasks/{task_pk}/comments/
+    """
+    serializer_class = CommentSerializer
+    permission_classes = [IsAuthenticated, IsProjectMember, IsAuthorOrReadOnly]
+
+    def get_queryset(self):
+        """
+        Filters the queryset to return only comments belonging to the
+        task specified in the URL (e.g., /tasks/123/comments/).
+        """
+        task_pk = self.kwargs['task_pk']
+        # Use Django's ContentType framework to filter comments for the Task model
+        task_content_type = ContentType.objects.get_for_model(Task)
+        return Comment.objects.filter(content_type=task_content_type, object_id=task_pk)
+
+    def perform_create(self, serializer):
+        """
+        Automatically associates the new comment with the correct task,
+        and sets the author to the correct ProjectMember instance.
+        """
+        task = get_object_or_404(Task, pk=self.kwargs['task_pk'])
+
+        try:
+            # Find the ProjectMember object that links the current user to the task's project.
+            project_member_author = ProjectMember.objects.get(
+                user=self.request.user,
+                project=task.project
+            )
+        except ProjectMember.DoesNotExist:
+            # If no link exists, the user is not a member of this project.
+            raise PermissionDenied("You are not a member of this project and cannot comment.")
+
+        # Save the comment, linking it to the ProjectMember and the task.
+        serializer.save(author=project_member_author, content_object=task)

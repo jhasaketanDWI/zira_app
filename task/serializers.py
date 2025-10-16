@@ -5,6 +5,7 @@ from common.models import Comment
 from django.contrib.auth import get_user_model
 # from user.models import User
 User = get_user_model()
+
 class ActivitySerializer(serializers.ModelSerializer):
     comment_body = serializers.CharField(write_only=True)
     comment_details = serializers.SerializerMethodField()
@@ -94,12 +95,24 @@ class _UserNestedSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id','email']
+
 class _ProjectMemberNestedSerializer(serializers.ModelSerializer):
     """A lightweight, read-only serializer for displaying user details."""
     user=_UserNestedSerializer(read_only=True)
     class Meta:
         model = ProjectMember
         fields = ['id', 'user', 'role']
+class CommentSerializer(serializers.ModelSerializer):
+    """
+    Serializer for the Comment model. It includes nested author details
+    for read operations and ensures the author is set automatically on creation.
+    """
+    author = _ProjectMemberNestedSerializer(read_only=True) 
+    class Meta:
+        model = Comment
+        fields = ['id', 'author', 'body', 'created_at', 'updated_at']
+        read_only_fields = ['author', 'created_at', 'updated_at']
+
 class TaskSerializer(serializers.ModelSerializer):
     """
     Serializer for the Task model.
@@ -122,14 +135,14 @@ class TaskSerializer(serializers.ModelSerializer):
     reporter=_ProjectMemberNestedSerializer(read_only=True)
     subtasks = TaskSubtaskUpdateSerializer(many=True, read_only=True)
     activity_log = ActivitySerializer(many=True, read_only=True)
-
+    comments = CommentSerializer(many=True, read_only=True) 
     class Meta:
         model = Task
         fields = [
             'id', 'project', 'sprint', 'epic', 'title', 'description',
             'status', 'priority', 'task_type', 'status_id', 'assignees', 'reporter', 'tags',
             'due_date', 'story_points', 'subtasks', # Added new fields 'parent_task'
-            'created_at', 'updated_at','activity_log'
+            'created_at', 'updated_at','activity_log','comments'
         ]
         read_only_fields = ['created_at', 'updated_at', 'subtasks','epic']
 
@@ -397,5 +410,4 @@ class TaskBoardSerializer(serializers.ModelSerializer):
 #     def validate(self, data):
 #         # You could add more complex validation here if needed
 #         return data
-
 

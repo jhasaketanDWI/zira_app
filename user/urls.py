@@ -15,6 +15,7 @@ from .views import(
     SetPasswordView, 
     UserRoleUpdateView,
     UserRolesView,
+    FilteredUserListView,
     )
 
 from rest_framework_simplejwt.views import (
@@ -60,7 +61,7 @@ urlpatterns = [
     path('users/<int:pk>/change-role/', UserRoleUpdateView.as_view(), name='user-change-role'),
 
     path('users/available-roles/', UserRolesView.as_view(), name='available-user-roles'),
-
+    path('users/list/', FilteredUserListView.as_view(), name='user-list-by-role'),
     path('', include(router.urls)),
 ]
 

@@ -300,3 +300,43 @@ class UserRolesView(APIView):
         return Response([])
 
 
+class FilteredUserListView(generics.ListAPIView):
+    """
+    Provides a list of users based on the role of the requesting user
+    and an optional 'role' query parameter.
+    
+    Example Usage:
+    - GET /api/users/list/ -> Returns all users the requester is allowed to see.
+    - GET /api/users/list/?role=developer -> Returns only developers the requester is allowed to see.
+    """
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        requesting_user = self.request.user
+        
+        # Determine the roles the current user is allowed to see based on hierarchy
+        if requesting_user.role == User.Role.OWNER:
+            allowed_roles = [User.Role.MANAGER, User.Role.DEVELOPER, User.Role.TESTER]
+        elif requesting_user.role == User.Role.ADMIN:
+            # Assuming Admin is the highest level and can see all other roles
+            allowed_roles = [User.Role.OWNER, User.Role.MANAGER, User.Role.DEVELOPER, User.Role.TESTER]
+        elif requesting_user.role == User.Role.MANAGER:
+            allowed_roles = [User.Role.DEVELOPER, User.Role.TESTER]
+        else: # Developers and Testers have no subordinates to view
+            allowed_roles = []
+        
+        # Start with the base queryset of users in the allowed roles
+        queryset = User.objects.filter(
+            is_deleted=False, 
+            is_active=True, 
+            role__in=allowed_roles
+        )
+
+        # Apply the optional role filter from the query parameter
+        role_filter = self.request.query_params.get('role', None)
+        if role_filter:
+            # This filter is securely applied to the already-restricted queryset
+            queryset = queryset.filter(role__iexact=role_filter)
+        
+        return queryset.order_by('email')

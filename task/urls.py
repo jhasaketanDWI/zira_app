@@ -8,7 +8,8 @@ from .views import(
         TaskViewSet,
         StatusViewSet,
         TagViewSet,
-        ActivityViewSet
+        ActivityViewSet,
+        CommentViewSet,  
     )
 
 router = routers.DefaultRouter()
@@ -24,6 +25,7 @@ router.register(r'tags', TagViewSet, basename='tag')
 # This creates routes like /tasks/{task_pk}/activities/
 tasks_router = routers.NestedDefaultRouter(router, r'tasks', lookup='task')
 tasks_router.register(r'activities', ActivityViewSet, basename='task-activities')
+tasks_router.register(r'comments', CommentViewSet, basename='task-comments') # ✨ ADD THIS LINE
 
 urlpatterns = [
     path('', include(router.urls)),
