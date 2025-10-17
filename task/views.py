@@ -69,12 +69,12 @@ class EpicViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
         check_project_permission(self.request.user, project)  # Owner/PM only
-        serializer.save()
+        serializer.save(created_by=self.request.user, updated_by=self.request.user)
 
     def perform_update(self, serializer):
         project = serializer.instance.project
         check_project_permission(self.request.user, project)
-        serializer.save()
+        serializer.save(created_by=self.request.user)
 
 
 
