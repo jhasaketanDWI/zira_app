@@ -234,13 +234,13 @@ AUTHENTICATION_BACKENDS = (
 
 
 # Replace with your own keys obtained from Google
-# SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = '804264640043-ml1n9lmpgepsjaefuah76c6784cjli3h.apps.googleusercontent.com'
-# SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = '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'
+SOCIAL_AUTH_GOOGLE_OAUTH2_KEY = ''
+SOCIAL_AUTH_GOOGLE_OAUTH2_SECRET = ''
 SOCIALACCOUNT_PROVIDERS = {
     'google': {
         'APP': {
-            # 'client_id': "804264640043-ml1n9lmpgepsjaefuah76c6784cjli3h.apps.googleusercontent.com",
-            # 'secret': "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",
+            'client_id': "",
+            'secret': "",
             'key': ""
         },
         'SCOPE': ['profile', 'email'],
