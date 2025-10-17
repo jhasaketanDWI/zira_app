@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from common.middleware import get_current_user
 from .manager import SoftDeleteManager
 
+
 class SoftDeleteModel(models.Model):
     is_deleted = models.BooleanField(default=False)
     deleted_at = models.DateTimeField(null=True, blank=True)
@@ -83,11 +84,11 @@ class Comment(AuditBaseModel):
     #     null=True  
     # )
     author = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
+        'project.ProjectMember', # Was settings.AUTH_USER_MODEL
         on_delete=models.SET_NULL,
         null=True,
         related_name='task_comments',
-        help_text="The user who wrote the comment."
+        help_text="The project member who wrote the comment."
     )
     body = models.TextField(
         help_text="The content of the comment."

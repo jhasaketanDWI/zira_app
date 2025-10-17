@@ -10,9 +10,13 @@ from .views import(
     MyTokenObtainPairView,
     LogoutView,
     TeamStatsView,
-    UserSoftDeleteAPIView
+    UserSoftDeleteAPIView,
+    InviteUserView,
+    SetPasswordView, 
+    UserRoleUpdateView,
+    UserRolesView,
+    FilteredUserListView,
     )
-# from .views import InviteUserView, SetPasswordView, UserRoleUpdateView <- Uncomment after implementing Invitaitons model
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
@@ -44,20 +48,24 @@ urlpatterns = [
     # Google OAuth API (token-based)
     path('auth/google/', GoogleLogin.as_view(), name='google_login'),
 
+    # Team stats endpoint
     path('team/stats/', TeamStatsView.as_view(), name='team-stats'),
 
+    # URL for an OWNER to invite a new user
+    path('users/invite/', InviteUserView.as_view(), name='user-invite'),
+
+    # URL for an invited user to set their password
+    path('users/set-password/', SetPasswordView.as_view(), name='set-password'),
+
+    # URL for an OWNER to change a user's role
+    path('users/<int:pk>/change-role/', UserRoleUpdateView.as_view(), name='user-change-role'),
+
+    path('users/available-roles/', UserRolesView.as_view(), name='available-user-roles'),
+    path('users/list/', FilteredUserListView.as_view(), name='user-list-by-role'),
     path('', include(router.urls)),
 ]
 
-# Keep these urls commented till invitations model is applied
-"""# URL for an OWNER to invite a new user
-path('users/invite/', InviteUserView.as_view(), name='user-invite'),
 
-# URL for an invited user to set their password
-path('users/set-password/', SetPasswordView.as_view(), name='set-password'),
-
-# URL for an OWNER to change a user's role
-path('users/<int:pk>/change-role/', UserRoleUpdateView.as_view(), name='user-change-role')"""
 
 
 

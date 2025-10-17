@@ -186,13 +186,15 @@ class ActivityLog(AuditBaseModel):
         ('CREATE', 'Created'),
         ('UPDATE', 'Updated'),
         ('COMMENT', 'Commented'),
+        # ('STATUS_UPDATE', 'Status Updated'),
+        # ('PRIORITY_UPDATE', 'Priority Updated'),
     ]
     
     project = models.ForeignKey('project.Project', on_delete=models.CASCADE, related_name='activities')
     task = models.ForeignKey('task.Task', on_delete=models.CASCADE, null=True, blank=True)
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True)
-    action_type = models.CharField(max_length=20, choices=ACTION_TYPES)
+    action_type = models.CharField(max_length=20, choices=ACTION_TYPES) # This field now accepts the new types
     details = models.JSONField(default=dict)
 
     class Meta:
-        ordering = ['-created_at'] # Order by creation time from AuditBaseModel
+        ordering = ['-created_at']
