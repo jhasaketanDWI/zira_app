@@ -187,11 +187,13 @@ class GoogleLogin(SocialLoginView):
             refresh_token = str(refresh)
             email = user.email
             user_id = user.id
+            role=user.role
 
             return Response({
                 'access': access_token,
                 'refresh': refresh_token,
                 'email': email,
+                'role':role,
                 'user_id': user_id,
             })
         return response

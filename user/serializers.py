@@ -135,6 +135,10 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         user.last_login = timezone.now()
         user.save(update_fields=['last_login'])
         
+        data['role'] = user.role
+        data['email'] = user.email
+        data['user_id'] = user.id
+
         return data
 class AdminUserManagementSerializer(serializers.ModelSerializer):
     """Serializer for admins to create and update user accounts."""
