@@ -4,15 +4,15 @@ from django.views.decorators.csrf import csrf_exempt
 from .models import User,Invitation
 from rest_framework import viewsets, permissions, generics,viewsets, status
 from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
-from common.permissions import IsOwnerOrAdmin
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import MyTokenObtainPairSerializer
 from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.core.mail import send_mail
-from common.permissions import IsOwnerUser,IsOwnerOrAdmin
+from common.permissions import IsOwnerUser,IsOwnerAdminOrManager, IsOwnerOrAdmin
 from django.utils.crypto import get_random_string
+from django.db.models import Q
 from .serializers import(
      UserSerializer, 
      UserSignUpSerializer,
@@ -20,7 +20,13 @@ from .serializers import(
      AdminUserManagementSerializer,
      InvitationSerializer, SetPasswordSerializer, UserRoleSerializer
      )
-from project.models import Project
+from project.models import Project, ProjectMember
+
+# These imports are required to set up the Google social login endpoint
+from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
+from allauth.socialaccount.providers.oauth2.client import OAuth2Client
+from dj_rest_auth.registration.views import SocialLoginView
+from rest_framework.decorators import action
 
 # These imports are required to set up the Google social login endpoint
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
@@ -100,23 +106,92 @@ class AdminSignUpView(generics.CreateAPIView):
 
 
 class TeamStatsView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminUser]
-
+    permission_classes = [IsAuthenticated, IsOwnerAdminOrManager]
     def get(self, request, *args, **kwargs):
-        total_members = User.objects.count()
-        active_members = User.objects.filter(is_active=True).count()
-        
-        
-        active_projects = Project.objects.exclude(
-            status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
-        ).count()
+        user = request.user
+        if user.role == User.Role.OWNER or user.role == User.Role.ADMIN:
+            # --- Global Stats for Owner/Admin ---
+            total_members = User.objects.count()
+            active_members = User.objects.filter(is_active=True).count()
+            active_projects = Project.objects.exclude(
+                status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
+            ).count()
 
-        stats = {
-            'total_members': total_members,
-            'active_members': active_members,
-            'active_projects': active_projects
-        }
-        return Response(stats)
+            stats = {
+                # 'scope': 'global',
+                'total_members': total_members,
+                'active_members': active_members,
+                'active_projects': active_projects
+            }
+            return Response(stats)
+        
+        elif user.role == User.Role.MANAGER:
+            try:
+                managed_project_ids = ProjectMember.objects.filter(
+                    user=user, 
+                    role="PROJECT_MANAGER"
+                ).values_list('project_id', flat=True)
+
+                if not managed_project_ids:
+                    return Response({
+                        # 'scope': 'managed_projects',
+                        'total_members': 0,
+                        'active_members': 0,
+                        'active_projects': 0,
+                        'message': 'This manager is not assigned to any projects.'
+                    })
+
+                managed_projects = Project.objects.filter(id__in=managed_project_ids)
+
+                active_projects = managed_projects.exclude(
+                    status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
+                ).count()
+                
+                project_manager_user_ids = ProjectMember.objects.filter(
+                    project_id__in=managed_project_ids,
+                    role="PROJECT_MANAGER"
+                ).values_list('user_id', flat=True).distinct()
+
+                # 5. Get all users who are members of those projects...
+                team_members = User.objects.filter(
+                    projectmember__project_id__in=managed_project_ids
+                ).exclude(
+                    # ...but are NOT global Admins or Owners
+                    Q(role=User.Role.ADMIN) | Q(role=User.Role.OWNER)
+                ).exclude(
+                    # ...and are NOT in the list of Project Managers
+                    id__in=project_manager_user_ids
+                ).distinct()
+                
+                total_members = team_members.count()
+                active_members = team_members.filter(is_active=True).count()
+
+                stats = {
+                    # 'scope': 'managed_projects',
+                    'total_members': total_members,       # Total unique users in their projects
+                    'active_members': active_members,      # Active users from that group
+                    'active_projects': active_projects     # Active projects they manage
+                }
+                return Response(stats)
+
+            except NameError:
+                return Response(
+                    {'error': 'The `ProjectMember` model could not be imported. Check the import in `users/views.py`.'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+            except Exception as e:
+                # This will catch errors if field names (user, project, role) are wrong
+                return Response(
+                    {'error': f'An error occurred. Check ProjectMember model relations. Details: {e}'}, 
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+        
+        return Response(
+            {'detail': 'You do not have permission to perform this action.'}, 
+            status=status.HTTP_403_FORBIDDEN
+        )
+
+
 
 class MyTokenObtainPairView(TokenObtainPairView):
     """
@@ -265,6 +340,56 @@ class SetPasswordView(generics.GenericAPIView):
         except (Invitation.DoesNotExist, User.DoesNotExist):
             return Response({"error": "Invalid token or user not found."}, status=status.HTTP_400_BAD_REQUEST)
 
+
+class ManagerTeamListView(generics.ListAPIView):
+    """
+    API endpoint for a Project Manager to see their team members.
+    
+    Returns a list of all users who are in the same projects
+    as the requesting user (where the user is a 'PROJECT_MANAGER').
+    
+    Excludes:
+    - Global Admins (User.role == "ADMIN")
+    - Global Owners (User.role == "OWNER")
+    - Other Project Managers (ProjectMember.role == "PROJECT_MANAGER")
+    - The user themselves
+    """
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated] # Only authenticated users can access
+
+    def get_queryset(self):
+        user = self.request.user
+
+        try:
+            managed_project_ids = ProjectMember.objects.filter(
+                user=user, 
+                role="PROJECT_MANAGER" # Using the project-specific role
+            ).values_list('project_id', flat=True)
+
+            if not managed_project_ids.exists():
+                return User.objects.none()
+
+            
+            project_manager_user_ids = ProjectMember.objects.filter(
+                project_id__in=managed_project_ids,
+                role="PROJECT_MANAGER"
+            ).values_list('user_id', flat=True).distinct()
+
+            queryset = User.objects.filter(
+                projectmember__project_id__in=managed_project_ids
+            ).exclude(
+                Q(role=User.Role.ADMIN) | Q(role=User.Role.OWNER)
+            ).exclude(
+                id__in=project_manager_user_ids
+            ).distinct().order_by('email')
+            
+            return queryset
+            
+        except (NameError, AttributeError):
+            return User.objects.none()
+        except Exception as e:
+            print(f"Error in ManagerTeamListView: {e}") # For your debugging
+            return User.objects.none()
 
 
 class UserRoleUpdateView(generics.UpdateAPIView):

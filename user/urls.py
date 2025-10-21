@@ -16,6 +16,7 @@ from .views import(
     UserRoleUpdateView,
     UserRolesView,
     FilteredUserListView,
+    ManagerTeamListView
     )
 
 from rest_framework_simplejwt.views import (
@@ -62,6 +63,8 @@ urlpatterns = [
 
     path('users/available-roles/', UserRolesView.as_view(), name='available-user-roles'),
     path('users/list/', FilteredUserListView.as_view(), name='user-list-by-role'),
+    path('users/manager-team-list/', ManagerTeamListView.as_view(), name='manager-team-list'),
+
     path('', include(router.urls)),
 ]
 

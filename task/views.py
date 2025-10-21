@@ -349,9 +349,24 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer = TaskStatusUpdateSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
+            #Log the status change
+            print("Creating ActivityLog...")
+            ActivityLog.objects.create(
+                project=task.project,
+                task=task,
+                user=request.user,
+                action_type='STATUS_UPDATE',
+                details={
+                    'title': task.title,
+                    'new_status': str(serializer.validated_data.get('status')),
+                    'message': f"Task status updated to {serializer.validated_data.get('status')}."
+                }
+            )
+            print("ActivityLog created successfully.")
             # Return the full task data for context
             return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
     
     @action(detail=False, methods=['get'], url_path='by-status')
     def by_status(self, request):
@@ -436,8 +451,30 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'], url_path='priority')
     def update_priority(self, request, pk=None):
-        """PATCH request to update only the task's priority."""
-        return self._update_task_field(request, pk, TaskPriorityUpdateSerializer)
+        task = self.get_object()
+
+        # Update the priority
+        serializer = TaskPriorityUpdateSerializer(task, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+
+            # Log the priority change
+            new_priority = serializer.validated_data.get('priority')
+            ActivityLog.objects.create(
+                project=task.project,
+                task=task,
+                user=request.user,
+                action_type='PRIORITY_UPDATE',
+                details={
+                    'title': task.title,
+                    'new_priority': str(new_priority),
+                    'message': f"Task priority updated to {new_priority}."
+                }
+            )
+
+            # Return the full task data
+            return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], url_path='add-activity')
     def add_activity(self, request, pk=None):

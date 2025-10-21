@@ -50,3 +50,17 @@ class IsOwnerUser(permissions.BasePermission):
     def has_permission(self, request, view):
         # Check if the user is authenticated and has the role of 'OWNER'
         return request.user and request.user.is_authenticated and request.user.role == User.Role.OWNER
+    
+
+class IsOwnerAdminOrManager(permissions.BasePermission):
+    """
+    Allows access only to Owners, Admins, or Managers.
+    """
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+        return request.user.role in [
+            User.Role.OWNER, 
+            User.Role.ADMIN, 
+            User.Role.MANAGER
+        ]
