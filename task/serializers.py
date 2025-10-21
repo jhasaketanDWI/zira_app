@@ -141,10 +141,10 @@ class TaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'project', 'sprint', 'epic', 'title', 'description',
             'status', 'priority', 'task_type', 'status_id', 'assignees', 'reporter', 'tags',
-            'due_date', 'story_points', 'subtasks', # Added new fields 'parent_task'
+            'start_date', 'due_date', 'story_points', 'subtasks', # Added new fields 'parent_task'
             'created_at', 'updated_at','activity_log','comments'
         ]
-        read_only_fields = ['created_at', 'updated_at', 'subtasks','epic']
+        read_only_fields = ['created_at', 'updated_at', 'subtasks']
 
 
     def to_representation(self, instance):
@@ -243,7 +243,7 @@ class EpicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Epic
         fields = [
-            'id', 'project', 'title', 'description', 'status', 'sprints'
+            'id', 'project', 'title', 'description', 'status', 'sprints', 'start_date', 'end_date',
             
         ]
 

@@ -4,12 +4,12 @@ from rest_framework import status
 from rest_framework.decorators import action
 from django.db.models import Q
 from .models import( Project,ProjectMember)
-from rest_framework import viewsets
+from rest_framework import viewsets, serializers
 from rest_framework.permissions import IsAuthenticated
 from common.permissions import check_project_permission
 from .serializers import(ProjectSerializer, ProjectMemberSerializer, ProjectDetailSerializer,ActivityLogSerializer,_UserNestedSerializer, ProjectMemberBulkAssignByRoleSerializer, ProjectMemberInviteSerializer)
 from rest_framework.views import APIView
-from task.models import Task, ActivityLog 
+from task.models import Task, Epic, ActivityLog, Status
 from django.utils import timezone
 from datetime import timedelta
 from django.db.models import Count
@@ -441,3 +441,50 @@ class ProjectSummaryView(APIView):
         }
 
         return Response(response_data)
+
+class _TimelineTaskSerializer(serializers.ModelSerializer):
+    # This change explicitly tells the serializer how to handle the status relationship
+    status = serializers.PrimaryKeyRelatedField(
+        queryset=Status.objects.all(),
+        allow_null=True
+    )
+
+    class Meta:
+        model = Task
+        fields = ('id', 'title', 'start_date', 'due_date', 'status')
+
+class _TimelineEpicSerializer(serializers.ModelSerializer):
+    # Nest the task serializer to structure the data hierarchically
+    tasks = _TimelineTaskSerializer(source='epic_tasks', many=True, read_only=True)
+
+    class Meta:
+        model = Epic
+        fields = ('id', 'title', 'start_date', 'end_date', 'tasks')
+
+
+class ProjectTimelineView(APIView):
+    """
+    A read-only API endpoint that provides data structured for a timeline view,
+    ensuring the requesting user is a member of the project.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, pk=None):
+        # 1. Permission Check (Aligned with your project's pattern)
+        # Ensures the user making the request is a member of the project.
+        if not ProjectMember.objects.filter(project_id=pk, user=request.user).exists():
+            return Response({"error": "You do not have permission to view this project's timeline."}, status=status.HTTP_403_FORBIDDEN)
+
+        try:
+            # 2. Query Epics related to this project, pre-fetching tasks for efficiency
+            project_epics = Epic.objects.filter(project_id=pk).prefetch_related('epic_tasks')
+
+            # 3. Serialize the data using our local, timeline-specific serializers
+            serializer = _TimelineEpicSerializer(project_epics, many=True)
+
+            # 4. Return the structured JSON response
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            # General error handler
+            return Response({"error": "An unexpected error occurred."}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

@@ -4,17 +4,28 @@ from project.models import Project, ProjectMember
 from django.contrib.contenttypes.fields import GenericRelation
 from django.conf import settings
 
-class Epic(AuditBaseModel):
-    class Status(models.TextChoices):
-        OPEN = 'OPEN', 'Open'
-        IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
-        DONE = 'DONE', 'Done'
-        ARCHIVED = 'ARCHIVED', 'Archived'
+class Status(AuditBaseModel):
+    """
+    Represents a status column in the Kanban board (e.g., To Do, In Progress).
+    """
+    # project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='statuses')
+    title = models.CharField(max_length=100, unique=True)
+    order = models.PositiveIntegerField(default=0,help_text="Order of the column on the board")
 
+    class Meta:
+        verbose_name_plural = "Statuses"
+        ordering = ['order']
+
+    def __str__(self):
+        return self.title
+
+class Epic(AuditBaseModel):
+    status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True, blank=True, related_name='epics')
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
-    status = models.CharField(max_length=20, choices=Status.choices, default=Status.OPEN)
+    start_date = models.DateField(null=True, blank=True)
+    end_date = models.DateField(null=True, blank=True)
 
     def __str__(self):
         return self.title
@@ -46,21 +57,6 @@ class Sprint(AuditBaseModel):
     def __str__(self):
         return f"{self.project.name} - {self.name}"
 
-class Status(AuditBaseModel):
-    """
-    Represents a status column in the Kanban board (e.g., To Do, In Progress).
-    """
-    # project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='statuses')
-    title = models.CharField(max_length=100, unique=True)
-    order = models.PositiveIntegerField(default=0,help_text="Order of the column on the board")
-
-    class Meta:
-        verbose_name_plural = "Statuses"
-        ordering = ['order']
-
-    def __str__(self):
-        return self.title
-
 
 
 class Task(AuditBaseModel):
@@ -84,8 +80,9 @@ class Task(AuditBaseModel):
     priority = models.CharField(max_length=20, choices=Priority.choices, default=Priority.MEDIUM)
     task_type = models.CharField(max_length=20, choices=TaskType.choices, default=TaskType.FEATURE)
     
-    completed_at = models.DateTimeField(null=True, blank=True) 
+    completed_at = models.DateTimeField(null=True, blank=True)
 
+    start_date = models.DateField(null=True, blank=True)
     due_date = models.DateField(null=True, blank=True)
     parent_task = models.ForeignKey('self', on_delete=models.CASCADE, null=True, blank=True, related_name='subtasks')
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='tasks')
@@ -94,20 +91,18 @@ class Task(AuditBaseModel):
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True, 
-        related_name='tasks' # Allows you to do sprint.tasks.all()
+        related_name='sprint_tasks' # Allows you to do sprint.tasks.all()
     )
     epic = models.ForeignKey(
         Epic, 
         on_delete=models.SET_NULL, 
         null=True, 
         blank=True,
-        related_name='tasks' # Allows you to do epic.tasks.all()
+        related_name='epic_tasks' # Allows you to do epic.tasks.all()
     )
     assignees = models.ManyToManyField(ProjectMember, related_name='assigned_tasks', blank=True)
 
-    reporter = models.ForeignKey(ProjectMember, related_name='reported_tasks', on_delete=models.SET_NULL, null=True,
-    
-                                 blank=True)
+    reporter = models.ForeignKey(ProjectMember, related_name='reported_tasks', on_delete=models.SET_NULL, null=True, blank=True)
     connected_items = models.ManyToManyField('self', blank=True, symmetrical=False)
     story_points = models.PositiveSmallIntegerField(null=True, blank=True, help_text="Estimate of effort for the task")
     comments = GenericRelation('common.Comment', related_query_name='task')
