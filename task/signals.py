@@ -14,6 +14,6 @@ def update_tasks_on_sprint_epic_change(sender, instance, created, **kwargs):
 
     sprint = instance
     new_epic = sprint.epic
-    tasks_to_update = sprint.tasks.exclude(epic=new_epic)
+    tasks_to_update = sprint.sprint_tasks.all().exclude(epic=new_epic)
     if tasks_to_update.exists():
         tasks_to_update.update(epic=new_epic)

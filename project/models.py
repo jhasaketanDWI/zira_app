@@ -23,7 +23,7 @@ class Project(AuditBaseModel):
 class ProjectMember(AuditBaseModel):
     class Role(models.TextChoices):
         OWNER = 'OWNER', 'Owner'
-        PROJECT_MANAGER = 'PROJECT_MANAGER', 'Project Manager'
+        MANAGER = 'MANAGER', 'Manager'
         DEVELOPER = 'DEVELOPER', 'Developer'
         TESTER = 'TESTER', 'Tester'
 

@@ -27,7 +27,7 @@ class ActivitySerializer(serializers.ModelSerializer):
             return {
                 'id': obj.comment.id,
                 'body': obj.comment.body,
-                'author': obj.comment.author.get_full_name() if obj.comment.author else None,
+                'author': obj.comment.author.user.get_full_name() if obj.comment.author and obj.comment.author.user else None,
                 'datetime': obj.comment.created_at # The comment's own timestamp
             }
         return None
@@ -43,9 +43,22 @@ class ActivitySerializer(serializers.ModelSerializer):
         
         current_user = self.context['request'].user
 
-        # 1. Create the independent Comment object
-        comment = Comment.objects.create(author=current_user, body=comment_text)
+        try:
+            project_member_author = ProjectMember.objects.get(
+                user=current_user,
+                project=task.project
+            )
+        except ProjectMember.DoesNotExist:
+            # Use serializers.ValidationError inside a serializer
+            raise serializers.ValidationError(
+                "You are not a member of this project and cannot comment."
+            )
 
+        # 1. Create the independent Comment object
+        comment = Comment.objects.create(
+            author=project_member_author,  # Use the ProjectMember instance
+            body=comment_text
+        )
         # 2. Create the Activity that links the Task to the Comment
         # Now, validated_data does not contain 'task' or 'comment_body',
         # so it is safe to unpack.
@@ -220,7 +233,7 @@ class TaskSerializer(serializers.ModelSerializer):
 class SprintSerializer(serializers.ModelSerializer):
     # serialize them using TaskSerializer, and add them to a 'tasks' list.
     
-    tasks = TaskSerializer(many=True, read_only=True)
+    tasks = TaskSerializer(source='sprint_tasks', many=True, read_only=True)    
     class Meta:
         model = Sprint
         fields = [

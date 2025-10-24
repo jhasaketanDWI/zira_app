@@ -1,0 +1,3155 @@
+{
+	"info": {
+		"_postman_id": "5758eaad-116b-4196-97cc-9161ac9c4557",
+		"name": "Test-app",
+		"description": "Complete API collection for the Django project, structured by app.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "34092782"
+	},
+	"item": [
+		{
+			"name": "Authentication",
+			"item": [
+				{
+					"name": "OWNER Management",
+					"item": [
+						{
+							"name": "List Users (Admin)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/admin/users/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get User (Admin)",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/admin/users/{{owner_id}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										"{{owner_id}}",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "OWNER Signup",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \n \"email\": \"root@gmail.com\",\n    \"password\": \"password-123\",\n    \"first_name\": \"Khusi\",\n    \"last_name\": \"Pal\"\n\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/signup/admin/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"signup",
+										"admin",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "OWNER-login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = JSON.parse(responseBody);\r",
+											"pm.environment.set(\"accessToken\", jsonData.access);\r",
+											"pm.environment.set(\"owner_id\", jsonData.user_id);"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n     \"email\": \"root@gmail.com\",\n    \"password\": \"password-123\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/token/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"token",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update_Owner_profile",
+							"protocolProfileBehavior": {
+								"strictSSL": false
+							},
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n   \r\n    \"email\": \"root@gmail.com\",\r\n    \"first_name\": \"Root\",\r\n    \"last_name\": \"Pal\",\r\n    \"phone\": null,\r\n    \"is_active\": true,\r\n    \"role\": \"OWNER\",\r\n    \"last_login\": \"2025-10-17 13:28:18 IST\",\r\n    \"is_deleted\": false,\r\n    \"deleted_at\": null\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/admin/users/{{owner_id}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"admin",
+										"users",
+										"{{owner_id}}",
+										""
+									]
+								}
+							},
+							"response": [
+								{
+									"name": "Example_of_updated_Onwer_Data",
+									"originalRequest": {
+										"method": "PUT",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n   \r\n    \"email\": \"root@gmail.com\",\r\n    \"first_name\": \"Root\",\r\n    \"last_name\": \"Pal\",\r\n    \"phone\": null,\r\n    \"is_active\": true,\r\n    \"role\": \"OWNER\",\r\n    \"last_login\": \"2025-10-17 13:28:18 IST\",\r\n    \"is_deleted\": false,\r\n    \"deleted_at\": null\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/admin/users/{{owner_id}}/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"admin",
+												"users",
+												"{{owner_id}}",
+												""
+											]
+										}
+									},
+									"status": "OK",
+									"code": 200,
+									"_postman_previewlanguage": null,
+									"header": [
+										{
+											"key": "Date",
+											"value": "Fri, 17 Oct 2025 07:59:41 GMT"
+										},
+										{
+											"key": "Server",
+											"value": "WSGIServer/0.2 CPython/3.13.7"
+										},
+										{
+											"key": "Content-Type",
+											"value": "application/json"
+										},
+										{
+											"key": "Vary",
+											"value": "Accept, Cookie, origin"
+										},
+										{
+											"key": "Allow",
+											"value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+										},
+										{
+											"key": "X-Frame-Options",
+											"value": "DENY"
+										},
+										{
+											"key": "Content-Length",
+											"value": "192"
+										},
+										{
+											"key": "X-Content-Type-Options",
+											"value": "nosniff"
+										},
+										{
+											"key": "Referrer-Policy",
+											"value": "same-origin"
+										},
+										{
+											"key": "Cross-Origin-Opener-Policy",
+											"value": "same-origin"
+										}
+									],
+									"cookie": [],
+									"body": "{\n    \"id\": 2,\n    \"email\": \"root@gmail.com\",\n    \"first_name\": \"Root\",\n    \"last_name\": \"Pal\",\n    \"phone\": null,\n    \"is_active\": true,\n    \"role\": \"OWNER\",\n    \"last_login\": \"2025-10-17 13:28:18 IST\",\n    \"is_deleted\": false,\n    \"deleted_at\": null\n}"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Login & SignUp(For Users)",
+					"item": [
+						{
+							"name": "Get User",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/users/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Any User Login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = JSON.parse(responseBody);",
+											"pm.environment.set(\"accessToken\", jsonData.access);",
+											"pm.environment.set(\"user_id\", jsonData.user_id);"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"jhasketansa63@gmail.com\",\n    \"password\": \"Chintusa@123#\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/token/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"token",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Any User Login Copy",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = JSON.parse(responseBody);",
+											"pm.environment.set(\"accessToken\", jsonData.access);",
+											"pm.environment.set(\"user_id\", jsonData.user_id);"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"deepakmahanandia999@gmail.com\",\n    \"password\": \"Tester-123#\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/token/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"token",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "User Signup",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"email\": \"chintu@gmail.com\",\n    \"password\": \"password-123\",\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\",\n    \"role\": \"DEVELOPER\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/signup/user/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"signup",
+										"user",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update_users_profile",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"email\": \"jhasketansa63@gmail.com\",\r\n    \"first_name\": \"Raam\",\r\n    \"last_name\": \"Sa\",\r\n    \"phone\": null,\r\n    \"is_active\": true,\r\n    \"role\": \"MANAGER\",\r\n    \"last_login\": \"2025-10-17 13:31:20 IST\",\r\n    \"is_deleted\": false,\r\n    \"deleted_at\": null\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/{{user_id}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"{{user_id}}",
+										""
+									]
+								}
+							},
+							"response": [
+								{
+									"name": "Example_of_update_users_profile_Data",
+									"originalRequest": {
+										"method": "PUT",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n    \"email\": \"jhasketansa63@gmail.com\",\r\n    \"first_name\": \"Raam\",\r\n    \"last_name\": \"Sa\",\r\n    \"phone\": null,\r\n    \"is_active\": true,\r\n    \"role\": \"MANAGER\",\r\n    \"last_login\": \"2025-10-17 13:31:20 IST\",\r\n    \"is_deleted\": false,\r\n    \"deleted_at\": null\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/users/{{user_id}}/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"users",
+												"{{user_id}}",
+												""
+											]
+										}
+									},
+									"status": "OK",
+									"code": 200,
+									"_postman_previewlanguage": null,
+									"header": [
+										{
+											"key": "Date",
+											"value": "Fri, 17 Oct 2025 08:03:56 GMT"
+										},
+										{
+											"key": "Server",
+											"value": "WSGIServer/0.2 CPython/3.13.7"
+										},
+										{
+											"key": "Content-Type",
+											"value": "application/json"
+										},
+										{
+											"key": "Vary",
+											"value": "Accept, Cookie, origin"
+										},
+										{
+											"key": "Allow",
+											"value": "GET, PUT, PATCH, DELETE, HEAD, OPTIONS"
+										},
+										{
+											"key": "X-Frame-Options",
+											"value": "DENY"
+										},
+										{
+											"key": "Content-Length",
+											"value": "126"
+										},
+										{
+											"key": "X-Content-Type-Options",
+											"value": "nosniff"
+										},
+										{
+											"key": "Referrer-Policy",
+											"value": "same-origin"
+										},
+										{
+											"key": "Cross-Origin-Opener-Policy",
+											"value": "same-origin"
+										}
+									],
+									"cookie": [],
+									"body": "{\n    \"id\": 8,\n    \"email\": \"jhasketansa63@gmail.com\",\n    \"first_name\": \"Raam\",\n    \"last_name\": \"Sa\",\n    \"role\": \"MANAGER\",\n    \"phone\": null,\n    \"is_active\": true\n}"
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Oauth",
+					"item": [
+						{
+							"name": "Google-Login",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"var jsonData = JSON.parse(responseBody);\r",
+											"pm.environment.set(\"accessToken\", jsonData.access);"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n   \"access_token\": \"ya29.a0AQQ_BDS16KcI2zwrtiaPbIFqhys6X-n7Oa4YIWaljBsjIy4szGQzDZ2QH913lSuPDKMnZA1O3U9DIkhVkyvEzZxh83PT9iyVfnbKIG7NWqvPbk1TRITlB9zrzffw-sgdEWHLgZpGfZIrS--L2L92hK19RPpAupaRXAuxMWZJ89MLU-3zX9AkqlMjaPqLI-clWrMjmbMaCgYKAUcSARESFQHGX2MiNpzLW-gBZNrwyndRrmK9YQ0206\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/auth/google/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"auth",
+										"google",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Refresh_token",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \"refresh\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc2MDYxMDQwNywiaWF0IjoxNzU5MzE0NDA3LCJqdGkiOiJmMmNkYTI2NzU3YjI0ZTY0YTBkZWU3OWVjZGU4NTIwYiIsInVzZXJfaWQiOiI1In0.IV_OH66dPWB25Hww4xbtmzzrmvIwotJh1X0tu8sVfxU\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/token/refresh/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"token",
+								"refresh",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Logout",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n       \"refresh\": \"eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoicmVmcmVzaCIsImV4cCI6MTc2MDYxMTAwMiwiaWF0IjoxNzU5MzE1MDAyLCJqdGkiOiI1MDU2ZDcyMzcxMTE0NDhmYWIxZjU4NzQ4MGM2NmE4NSIsInVzZXJfaWQiOiI1IiwiZW1haWwiOiJyb3lqMjc5MzlAZXhhbXBsZS5jb20ifQ.d1cbMkIbwAWcDlL6knULuE43s_qsH3T1K_4dxMoN2iE\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/logout/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"logout",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Handles user creation, management, and authentication."
+		},
+		{
+			"name": "Project",
+			"item": [
+				{
+					"name": "Project Member",
+					"item": [
+						{
+							"name": "Operations for Project_Manager",
+							"item": [
+								{
+									"name": "Get available managers",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/projects/1/available-members/manager/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												"1",
+												"available-members",
+												"manager",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Assign Project to a MANAGER",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n    \"user_id\":8 ,\r\n    \"role\": \"PROJECT_MANAGER\"\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/projects/{{project_id}}/members/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												"{{project_id}}",
+												"members",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "get all project members",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/projects/1/members/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												"1",
+												"members",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Assign Multiple Project_Managers",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n    \"user_ids\": [9]\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/projects/11/members/bulk-assign/PROJECT_MANAGER/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												"11",
+												"members",
+												"bulk-assign",
+												"PROJECT_MANAGER",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Create a Project and Assign a Project_Manager",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"name\": \"Project Beta\",\n     \"description\": \"Second project\",\n     \"project_manager_id\": 6\n     \n     }",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/projects/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												""
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						},
+						{
+							"name": "Operations for Developer and Tester",
+							"item": [
+								{
+									"name": "Get available Developer and Testers",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/projects/1/available-members/developer/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												"1",
+												"available-members",
+												"developer",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Assign Multiple Developers and Testers",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n    \"user_ids\": [9]\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/projects/1/members/bulk-assign/developer/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												"1",
+												"members",
+												"bulk-assign",
+												"developer",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "get all project members",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/projects/1/members/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"projects",
+												"1",
+												"members",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "get all Developers and Testers under my projects",
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/managed-team-members/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"managed-team-members",
+												""
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						}
+					]
+				},
+				{
+					"name": "Test Cases (by Project)",
+					"item": [
+						{
+							"name": "List Test Cases for Project",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/projects/3/testcases/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"projects",
+										"3",
+										"testcases",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Create Test Case for Project",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"Verify user login with valid credentials\",\n    \"steps\": \"1. Navigate to login page.\\n2. Enter valid email.\\n3. Enter valid password.\\n4. Click login button.\",\n    \"expected_result\": \"User is redirected to the dashboard.\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/projects/3/testcases/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"projects",
+										"3",
+										"testcases",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Timeline",
+					"item": [
+						{
+							"name": "Timeline",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{baseUrl}}/projects/1/timeline/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"projects",
+										"1",
+										"timeline",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "New Request",
+							"request": {
+								"method": "GET",
+								"header": []
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "List Projects",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Project",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Test-app\",\n    \"description\": \"This is a description for our new project.\",\n    \"status\": \"ONGOING\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Project Details",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Project",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Project Name\",\n    \"description\": \"An updated project description.\",\n    \"status\": \"ONGOING\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/1/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Project",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/1/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"1",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get available Managers",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/users/list/?role=manager",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"users",
+								"list",
+								""
+							],
+							"query": [
+								{
+									"key": "role",
+									"value": "manager"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Task Management",
+			"item": [
+				{
+					"name": "Epics",
+					"item": [
+						{
+							"name": "Create Epic",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"project\": 1, // ID of the project this epic belongs to\n    \"title\": \"Epic 1\",\n    \"description\": \"Desciption for epic 2\",\n    \"status\": 2,  // Optional: ID of the status (e.g., \"To Do\")\n    \"start_date\": \"2025-10-20\", // YYYY-MM-DD format\n    \"end_date\": \"2025-12-15\"   // YYYY-MM-DD format\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/epics/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"epics",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "get_Epic",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/epics/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"epics",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update Epic",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n     \r\n        \"title\": \"User Authentication Epic-1\",\r\n        \"description\": \"All tasks related to user sign-up, login, and profile management\",\r\n        \"project\":1,\r\n        \"status\": \"DONE\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/epics/1/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"epics",
+										"1",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "New Request",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/epics/3/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"epics",
+										"3",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Sprints",
+					"item": [
+						{
+							"name": "Partial Updates",
+							"item": [
+								{
+									"name": "complete-sprint",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/sprints/1/end/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"sprints",
+												"1",
+												"end",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "start-sprint",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/sprints/4/activate/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"sprints",
+												"4",
+												"activate",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "update-duration",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n   \r\n   \"duration\": 3,\r\n   \"start_date\": \"2025-10-01\",\r\n    \"end_date\": \"2025-10-14\"\r\n    \r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/sprints/1/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"sprints",
+												"1",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "update-goal",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n   \r\n          \"goal\": \"Complete the core authentication features.\"\r\n\r\n    \r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/sprints/1/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"sprints",
+												"1",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "update_sprint-name",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n   \r\n          \"name\": \"Complete the core authentication features.\"\r\n\r\n    \r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/sprints/1/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"sprints",
+												"1",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "update_start & end Date",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n   \r\n   \"start_date\": \"2025-12-01\",\r\n    \"end_date\": \"2026-10-14\"\r\n    \r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/sprints/1/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"sprints",
+												"1",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "add/update epic to sprints",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n   \r\n          \"epic\": 2\r\n\r\n    \r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/sprints/1/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"sprints",
+												"1",
+												""
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						},
+						{
+							"name": "Create Sprint",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Sprint 99 - Auth MVP\",\n    \"goal\": \"Complete the core authentication features.\",\n    \"project\": 1,\n    \"start_date\": \"2025-10-01\",\n    \"end_date\": \"2025-10-14\",\n    \"epic\":1\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/sprints/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"sprints",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "get_Sprint",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/sprints/4/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"sprints",
+										"4",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "delete_sprint",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/sprints/8/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"sprints",
+										"8",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update Sprints",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"name\": \"Sprint 2 - Auth MVP\",\r\n    \"goal\": \"Complete the core authentication features.\",\r\n    \"start_date\": \"2025-10-01\",\r\n    \"end_date\": \"2025-10-14\",\r\n    \"duration\": 3,\r\n    \"is_active\": false,\r\n    \"is_ended\": false,\r\n   \r\n    \"project\": 1,\r\n    \"epic\": \"\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/sprints/1/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"sprints",
+										"1",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "backlog-dashboard",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/sprints/dashboard/?project=1",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"sprints",
+										"dashboard",
+										""
+									],
+									"query": [
+										{
+											"key": "project",
+											"value": "1"
+										}
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Tickets",
+					"item": [
+						{
+							"name": "Create Ticket",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"sprint\": 1,\n    \"title\": \"Implement JWT Login Endpoint\",\n    \"description\": \"Create the API endpoint to handle user login and return JWT tokens.\",\n    \"assignee\": 1,\n    \"status\": \"TODO\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/tickets/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tickets",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "get_tickets",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/tickets/1/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tickets",
+										"1",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Task",
+					"item": [
+						{
+							"name": "Partial Updates(Task Management)",
+							"item": [
+								{
+									"name": "Update Status",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"project\": 2,\n    \"status\": 4\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/3/status/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"3",
+												"status",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Update Assignees",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"project\": 1,\n    \"assignees\": [2]\n\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/1/assignees/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"1",
+												"assignees",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Update Due Date",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n\"project\": 1,\n\"due_date\": \"2027-10-01\"\n}\n",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/1/due-date/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"1",
+												"due-date",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Update Story Points",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"story_points\": 5\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/1/story-points/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"1",
+												"story-points",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Update Priority (General PATCH)",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"priority\": \"LOW\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/3/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"3",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "updated Description",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n        \"description\": \"sckdnjk\"\r\n\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/1/description/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"1",
+												"description",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "add subtask",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n    \"parent_task\": 10\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/5/parent/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"5",
+												"parent",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "move to new Sprint",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n \"sprint\":7\r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/45/sprint/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"45",
+												"sprint",
+												""
+											]
+										}
+									},
+									"response": [
+										{
+											"name": "move to new Sprint",
+											"originalRequest": {
+												"method": "PATCH",
+												"header": [],
+												"body": {
+													"mode": "raw",
+													"raw": "{\r\n \"sprint\":1\r\n}",
+													"options": {
+														"raw": {
+															"language": "json"
+														}
+													}
+												},
+												"url": {
+													"raw": "{{baseUrl}}/tasks/2/sprint/",
+													"host": [
+														"{{baseUrl}}"
+													],
+													"path": [
+														"tasks",
+														"2",
+														"sprint",
+														""
+													]
+												}
+											},
+											"status": "OK",
+											"code": 200,
+											"_postman_previewlanguage": null,
+											"header": [
+												{
+													"key": "Date",
+													"value": "Thu, 23 Oct 2025 13:54:23 GMT"
+												},
+												{
+													"key": "Server",
+													"value": "WSGIServer/0.2 CPython/3.13.7"
+												},
+												{
+													"key": "Content-Type",
+													"value": "application/json"
+												},
+												{
+													"key": "Vary",
+													"value": "Accept, Cookie, origin"
+												},
+												{
+													"key": "Allow",
+													"value": "PATCH, OPTIONS"
+												},
+												{
+													"key": "X-Frame-Options",
+													"value": "DENY"
+												},
+												{
+													"key": "Content-Length",
+													"value": "513"
+												},
+												{
+													"key": "X-Content-Type-Options",
+													"value": "nosniff"
+												},
+												{
+													"key": "Referrer-Policy",
+													"value": "same-origin"
+												},
+												{
+													"key": "Cross-Origin-Opener-Policy",
+													"value": "same-origin"
+												}
+											],
+											"cookie": [],
+											"body": "{\n    \"id\": 2,\n    \"project\": 1,\n    \"sprint\": 1,\n    \"epic\": 1,\n    \"title\": \"My task\",\n    \"description\": \"Create the frontend and backend logic for the landing page.\",\n    \"status\": {\n        \"id\": 1,\n        \"title\": \"To Do\"\n    },\n    \"priority\": \"MEDIUM\",\n    \"task_type\": \"FEATURE\",\n    \"assignees\": [],\n    \"reporter\": {\n        \"id\": 1,\n        \"user\": {\n            \"id\": 1,\n            \"email\": \"root@gmail.com\"\n        },\n        \"role\": \"OWNER\"\n    },\n    \"tags\": [],\n    \"start_date\": \"2025-10-20\",\n    \"due_date\": \"2025-11-10\",\n    \"story_points\": null,\n    \"subtasks\": [],\n    \"created_at\": \"2025-10-23T13:54:04.397004Z\",\n    \"updated_at\": \"2025-10-23T13:54:23.086471Z\",\n    \"activity_log\": [],\n    \"comments\": []\n}"
+										}
+									]
+								},
+								{
+									"name": "update-task-title",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n  \"title\": \"UPDATED - Design the new homepage\"\r\n}\r\n",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/4/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"4",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "update-task-status",
+									"request": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n \"status\": 4\r\n}\r\n",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/1/status/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"1",
+												"status",
+												""
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						},
+						{
+							"name": "Activity Logs",
+							"item": [
+								{
+									"name": "Add Activity Log",
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"comment_body\": \"This comment was created on Saturday, October 4, 2025 at 11:01 AM.\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/5/add-activity/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"5",
+												"add-activity",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "get activities",
+									"protocolProfileBehavior": {
+										"disableBodyPruning": true
+									},
+									"request": {
+										"method": "GET",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"comment_body\": \"This comment was created on Saturday, October 4, 2025 at 11:01 AM.\"\n}"
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/5/activities/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"5",
+												"activities",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "update activities",
+									"request": {
+										"method": "PUT",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"comment_body\": \"This is the updated message text.\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/5/update-activity/{{activity_id}}/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"5",
+												"update-activity",
+												"{{activity_id}}",
+												""
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "New Request",
+									"request": {
+										"method": "DELETE",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"comment_body\": \"This is the updated message text.\"\n}"
+										},
+										"url": {
+											"raw": "{{baseUrl}}/tasks/6/delete-activity/{{activity_id}}/",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"tasks",
+												"6",
+												"delete-activity",
+												"{{activity_id}}",
+												""
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						},
+						{
+							"name": "create-task",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"// Parse the response body as JSON\r",
+											"let response = pm.response.json();\r",
+											"\r",
+											"// Get the reporter email\r",
+											"let reporterEmail = response.reporter.user.email;\r",
+											"\r",
+											"// Save it as a Postman environment or collection variable\r",
+											"pm.environment.set(\"reporterEmail\", reporterEmail); // Use pm.collectionVariables.set() if you prefer collection-level\r",
+											""
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"title\": \"Change landing page\",\r\n    \"description\": \"Create the frontend and backend logic for the landing page.\",\r\n    \"project\": 1,\r\n    \"status_id\": 1,\r\n    \"epic\": 3,\r\n    //\"priority\": \"HIGH\",\r\n    //\"task_type\": \"FEATURE\",\r\n    //\"sprint\": 2,\r\n    //\"assignees\": [3],\r\n    //\"tags\": [1, 2],\r\n    \"start_date\": \"2025-10-20\",     //YYYY-MM-DD\r\n    \"due_date\": \"2025-11-10\"        //YYYY-MM-DD\r\n    //\"story_points\": 5\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/tasks/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "delete-task",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/tasks/6/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"6",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "List of All Task Details",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/tasks/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get Single Task",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/tasks/1/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"1",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Edit Task",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"title\": \"[UPDATED] Design new dashboard layout\",\n    \"description\": \"Create mockups in Figma for the new user dashboard. Add mobile views.\",\n    \"project\": 9,\n    \"status_id\": 2,\n    \"sprint\": 7,\n    // \"epic\": 2/,\n    \"priority\": \"MEDIUM\",\n    \"task_type\": \"FEATURE\",\n    \"assignees\": [],\n    \"reporter\": 2\n    \n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/tasks/45/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"45",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Status",
+					"item": [
+						{
+							"name": "create-status",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n  \"title\": \"Testing-1\"\r\n}\r\n",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/tasks/create-status/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"create-status",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "get-Status",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/statuses/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"statuses",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "delete-status",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/statuses/1/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"statuses",
+										"1",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "status wise all tasks",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/tasks/by-status/?project_id=1",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"by-status",
+										""
+									],
+									"query": [
+										{
+											"key": "project_id",
+											"value": "1"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update task title",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n     \"title\": \"Archieved\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/statuses/6/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"statuses",
+										"6",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Comment",
+					"item": [
+						{
+							"name": "get all comments of a task",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/tasks/{{task_pk}}/comments/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"{{task_pk}}",
+										"comments",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "create comment",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"body\": \"This is my comment about the task progress. We should re-evaluate the story points.\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/tasks/{{task_pk}}/comments/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"{{task_pk}}",
+										"comments",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update comment",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\"body\": \"the task progress. We should re-evaluate the story points.\"}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/tasks/{{task_pk}}/comments/{{comment_id}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"{{task_pk}}",
+										"comments",
+										"{{comment_id}}",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "delete comment",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\"body\": \"the task progress. We should re-evaluate the story points.\"}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/tasks/{{task_pk}}/comments/{{comment_id}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"tasks",
+										"{{task_pk}}",
+										"comments",
+										"{{comment_id}}",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "get a single comment",
+							"request": {
+								"method": "GET",
+								"header": []
+							},
+							"response": []
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "Test Cases",
+			"item": [
+				{
+					"name": "Create Test Case (Nested)",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"Verify successful user login\",\n    \"steps\": \"1. Navigate to login page. 2. Enter valid credentials. 3. Click login.\",\n    \"expected_result\": \"User is redirected to the dashboard.\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/1/testcases/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"1",
+								"testcases",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "List Test Cases for Project (Nested)",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/1/testcases/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"1",
+								"testcases",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Test Case Status",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"status\": \"EXECUTED\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/testcases/1/status/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"testcases",
+								"1",
+								"status",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Billing",
+			"item": [
+				{
+					"name": "List Subscription Plans",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/subscription-plans/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"subscription-plans",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Admin-only endpoints for managing subscription plans."
+		},
+		{
+			"name": "User Management",
+			"item": [
+				{
+					"name": "User Details APIs",
+					"item": [
+						{
+							"name": "Team Stats",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{baseUrl}}/team/stats/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"team",
+										"stats",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "List Users",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/users/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "create-user",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"email\": \"new.worker35@example.com\",\r\n    \"first_name\": \"Jane\",\r\n    \"last_name\": \"Doe\",\r\n    \"role\": \"DEVELOPER\",\r\n    \"phone\": \"9876543210\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update-all-user-data",
+							"request": {
+								"method": "PUT",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"email\": \"new.worker22@example.com\",\r\n    \"first_name\": \"Janed\",\r\n    \"last_name\": \"Doe\",\r\n    \"role\": \"DEVELOPER\",\r\n    \"phone\": \"9876543219\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update-user-email",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"email\": \"new.worker23@example.com\"\r\n   \r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										""
+									]
+								}
+							},
+							"response": [
+								{
+									"name": "update-user-email",
+									"originalRequest": {
+										"method": "PATCH",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\r\n    \"email\": \"new.worker23@example.com\"\r\n   \r\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/users/9/?email=examplemailupdate@gmail.com",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"users",
+												"9",
+												""
+											],
+											"query": [
+												{
+													"key": "email",
+													"value": "examplemailupdate@gmail.com"
+												}
+											]
+										}
+									},
+									"_postman_previewlanguage": "",
+									"header": [],
+									"cookie": [
+										{
+											"expires": "Invalid Date",
+											"domain": "",
+											"path": ""
+										}
+									],
+									"body": ""
+								}
+							]
+						},
+						{
+							"name": "update-user-phone",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"phone\": 0\r\n   \r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update-user-first-name",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"first_name\":\"Raam\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/?",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										""
+									],
+									"query": [
+										{
+											"key": "",
+											"value": null
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update-user-last-name",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"first_name\":\"Raam\"\r\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/?",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										""
+									],
+									"query": [
+										{
+											"key": "",
+											"value": null
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update-user-role",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"role\":\"MANAGER\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "activate-user",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/activate-user/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										"activate-user",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "deactivate-user",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/9/deactivate-user/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"9",
+										"deactivate-user",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "list of developers and testers in projects under a manager",
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/users/manager-team-list/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"manager-team-list",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "User Invitation",
+					"item": [
+						{
+							"name": "invite a User",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"email\": \"bsajuniorl9@gmail.com\",\r\n    \"role\": \"MANAGER\"\r\n    }",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/invite/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"invite",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "set password",
+							"request": {
+								"auth": {
+									"type": "noauth"
+								},
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \r\n   \r\n    \"token\": \"7ef9ca52-8289-4e48-9997-8587c44e8838\",\r\n    \"password\": \"Tester-123#\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/set-password/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"set-password",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "change role of an User",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \r\n   \r\n    \"role\":\"TESTER\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/20/change-role/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"20",
+										"change-role",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Invite User to a Project",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"email\": \"deepakmahanandia999@gmail.com\",\r\n    \"role\": \"TESTER\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/projects/{{project_id}}/members/invite-member/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"projects",
+										"{{project_id}}",
+										"members",
+										"invite-member",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "delete a user",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/user/11/delete/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"user",
+								"11",
+								"delete",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Summary",
+			"item": [
+				{
+					"name": "get Summary",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/2/summary",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"2",
+								"summary"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "(NavBar)List APIs",
+			"item": [
+				{
+					"name": "list of task project wise",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/tasks/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"tasks",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "delete-task Copy",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/tasks/6/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks",
+								"6",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Task Copy",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"title\": \"[UPDATED] Design new dashboard layout\",\n    \"description\": \"Create mockups in Figma for the new user dashboard. Add mobile views.\",\n    \"project\": 9,\n    \"status_id\": 2,\n    \"sprint\": 7,\n    // \"epic\": 2/,\n    \"priority\": \"MEDIUM\",\n    \"task_type\": \"FEATURE\",\n    \"assignees\": [],\n    \"reporter\": 2\n    \n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/tasks/45/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"tasks",
+								"45",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{accessToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://127.0.0.1:8000/api"
+		},
+		{
+			"key": "accessToken",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "task_pk",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "comment_id",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "owner_id",
+			"value": "",
+			"type": "default"
+		}
+	]
+}

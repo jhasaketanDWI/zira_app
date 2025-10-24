@@ -122,8 +122,7 @@ class SprintViewSet(viewsets.ModelViewSet):
 
         # Find any tasks in this sprint that are NOT in a 'Done' status.
         # The '__iexact' makes the check case-insensitive.
-        unfinished_tasks = sprint.tasks.exclude(status__title__iexact='Done')
-
+        unfinished_tasks = sprint.sprint_tasks.exclude(status__title__iexact='Done')
         if unfinished_tasks.exists():
             # If any unfinished tasks exist, block the action and return an error.
             return Response(
