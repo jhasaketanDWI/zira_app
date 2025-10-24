@@ -588,7 +588,7 @@
 					"name": "Project Member",
 					"item": [
 						{
-							"name": "Operations for Project_Manager",
+							"name": "Operations for MANAGER ",
 							"item": [
 								{
 									"name": "Get available managers",
@@ -618,7 +618,7 @@
 										"header": [],
 										"body": {
 											"mode": "raw",
-											"raw": "{\r\n    \"user_id\":8 ,\r\n    \"role\": \"PROJECT_MANAGER\"\r\n}",
+											"raw": "{\r\n    \"user_id\":8 ,\r\n    \"role\": \"MANAGER \"\r\n}",
 											"options": {
 												"raw": {
 													"language": "json"
@@ -661,7 +661,7 @@
 									"response": []
 								},
 								{
-									"name": "Assign Multiple Project_Managers",
+									"name": "Assign Multiple MANAGER s",
 									"request": {
 										"method": "POST",
 										"header": [],
@@ -675,7 +675,7 @@
 											}
 										},
 										"url": {
-											"raw": "{{baseUrl}}/projects/11/members/bulk-assign/PROJECT_MANAGER/",
+											"raw": "{{baseUrl}}/projects/11/members/bulk-assign/MANAGER /",
 											"host": [
 												"{{baseUrl}}"
 											],
@@ -684,7 +684,7 @@
 												"11",
 												"members",
 												"bulk-assign",
-												"PROJECT_MANAGER",
+												"MANAGER ",
 												""
 											]
 										}
@@ -692,13 +692,13 @@
 									"response": []
 								},
 								{
-									"name": "Create a Project and Assign a Project_Manager",
+									"name": "Create a Project and Assign a MANAGER ",
 									"request": {
 										"method": "POST",
 										"header": [],
 										"body": {
 											"mode": "raw",
-											"raw": "{\n    \"name\": \"Project Beta\",\n     \"description\": \"Second project\",\n     \"project_manager_id\": 6\n     \n     }",
+											"raw": "{\n    \"name\": \"Project Beta\",\n     \"description\": \"Second project\",\n     \"MANAGER _id\": 6\n     \n     }",
 											"options": {
 												"raw": {
 													"language": "json"
