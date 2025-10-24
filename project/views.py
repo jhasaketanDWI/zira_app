@@ -32,7 +32,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ).distinct()  
      
     def perform_create(self, serializer):
-        manager_to_assign = serializer.validated_data.get('project_manager')
+        manager_to_assign = serializer.validated_data.get('MANAGER ')
 
         project = serializer.save(owner=self.request.user)
         ProjectMember.objects.create(
@@ -46,14 +46,14 @@ class ProjectViewSet(viewsets.ModelViewSet):
                 ProjectMember.objects.create(
                     user=manager_to_assign,
                     project=project,
-                    role=ProjectMember.Role.PROJECT_MANAGER
+                    role=ProjectMember.Role.MANAGER 
                 )
 
     def perform_update(self, serializer):
         project = self.get_object()
         try:
             member = ProjectMember.objects.get(project=project, user=self.request.user)
-            if member.role not in [ProjectMember.Role.OWNER, ProjectMember.Role.PROJECT_MANAGER]:
+            if member.role not in [ProjectMember.Role.OWNER, ProjectMember.Role.MANAGER ]:
                 raise PermissionDenied("You do not have permission to edit project details.")
         except ProjectMember.DoesNotExist:
             raise PermissionDenied("You are not a member of this project.")
@@ -96,7 +96,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         allowed_roles_to_query = []
         if requester_role == ProjectMember.Role.OWNER:
             allowed_roles_to_query = ['manager', 'developer', 'tester']
-        elif requester_role == ProjectMember.Role.PROJECT_MANAGER:
+        elif requester_role == ProjectMember.Role.MANAGER :
             allowed_roles_to_query = ['developer', 'tester']
 
         if role.lower() not in allowed_roles_to_query:
@@ -140,8 +140,8 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
 
         role_to_assign = serializer.validated_data["role"]
 
-        # if role_to_assign == ProjectMember.Role.PROJECT_MANAGER:
-        #     if ProjectMember.objects.filter(project=project, role=ProjectMember.Role.PROJECT_MANAGER).exists():
+        # if role_to_assign == ProjectMember.Role.MANAGER :
+        #     if ProjectMember.objects.filter(project=project, role=ProjectMember.Role.MANAGER ).exists():
         #         raise PermissionDenied("A Project Manager already exists for this project.")
         
         requester_role = self._get_requester_role(self.request.user, project)
@@ -149,7 +149,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         if requester_role == ProjectMember.Role.OWNER:
             if role_to_assign == ProjectMember.Role.OWNER:
                 raise PermissionDenied("Cannot assign another Owner.")
-        elif requester_role == ProjectMember.Role.PROJECT_MANAGER:
+        elif requester_role == ProjectMember.Role.MANAGER :
             if role_to_assign not in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
                 raise PermissionDenied("Project Managers can only assign Developers or Testers.")
         else:
@@ -179,7 +179,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         can_assign = False
         if requester_role == ProjectMember.Role.OWNER and role_to_assign != ProjectMember.Role.OWNER:
             can_assign = True
-        elif requester_role == ProjectMember.Role.PROJECT_MANAGER and role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
+        elif requester_role == ProjectMember.Role.MANAGER and role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
             can_assign = True
         
         if not can_assign:
@@ -232,9 +232,9 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
 
         # Permission Check
         can_invite = False
-        if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.PROJECT_MANAGER, ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
+        if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.MANAGER , ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
             can_invite = True
-        elif requester_role == ProjectMember.Role.PROJECT_MANAGER and project_role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
+        elif requester_role == ProjectMember.Role.MANAGER and project_role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
             can_invite = True
         
         if not can_invite:
@@ -246,7 +246,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             return Response({'error': 'An invitation for this email has already been sent.'}, status=status.HTTP_400_BAD_REQUEST)
 
         global_role_map = {
-            ProjectMember.Role.PROJECT_MANAGER: User.Role.MANAGER,
+            ProjectMember.Role.MANAGER : User.Role.MANAGER,
             ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
             ProjectMember.Role.TESTER: User.Role.TESTER,
         }
@@ -286,8 +286,8 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         project = serializer.instance.project
         new_role = serializer.validated_data.get("role")
 
-        if new_role and new_role == ProjectMember.Role.PROJECT_MANAGER:
-            if ProjectMember.objects.filter(project=project, role=ProjectMember.Role.PROJECT_MANAGER).exclude(pk=serializer.instance.pk).exists():
+        if new_role and new_role == ProjectMember.Role.MANAGER :
+            if ProjectMember.objects.filter(project=project, role=ProjectMember.Role.MANAGER ).exclude(pk=serializer.instance.pk).exists():
                 raise PermissionDenied("A Project Manager already exists for this project.")
 
         requester_role = self._get_requester_role(self.request.user, project)
@@ -297,7 +297,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
 
         if requester_role == ProjectMember.Role.OWNER:
             pass 
-        elif requester_role == ProjectMember.Role.PROJECT_MANAGER:
+        elif requester_role == ProjectMember.Role.MANAGER :
             original_role = serializer.instance.role
             if original_role not in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
                 raise PermissionDenied("Project Managers can only manage Developers and Testers.")
@@ -315,7 +315,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         if requester_role == ProjectMember.Role.OWNER:
             if instance.user == self.request.user:
                 raise PermissionDenied("Owners cannot remove themselves from a project.")
-        elif requester_role == ProjectMember.Role.PROJECT_MANAGER:
+        elif requester_role == ProjectMember.Role.MANAGER :
             if role_to_delete not in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
                 raise PermissionDenied("Project Managers can only remove Developers or Testers.")
         else:
@@ -334,7 +334,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
 #         # 1. Find the IDs of all projects where the current user is a Project Manager.
 #         managed_project_ids = ProjectMember.objects.filter(
 #             user=current_user,
-#             role=ProjectMember.Role.PROJECT_MANAGER
+#             role=ProjectMember.Role.MANAGER 
 #         ).values_list('project_id', flat=True)
 
 #         if not managed_project_ids.exists():
@@ -369,7 +369,7 @@ class ManagedTeamMembersView(APIView):
         # 1. Find the IDs of all projects where the current user is a Project Manager.
         managed_project_ids = ProjectMember.objects.filter(
             user=current_user,
-            role=ProjectMember.Role.PROJECT_MANAGER
+            role=ProjectMember.Role.MANAGER 
         ).values_list('project_id', flat=True)
 
         if not managed_project_ids.exists():
