@@ -15,6 +15,7 @@ from django.db.models import Count
 from user.models import User, Invitation
 from django.core.mail import send_mail
 from django.conf import settings
+from common.permissions import IsOwnerAdminOrManager
 from user.serializers import UserSerializer
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by("-id")
@@ -119,17 +120,38 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
     MODIFIED: This viewset is now nested under /projects/{project_pk}/members/
     """
     serializer_class = ProjectMemberSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated,IsOwnerAdminOrManager ]
 
     def get_queryset(self):
         """
-        This viewset now only returns members for the project specified in the URL.
+        This viewset now only returns members for the project specified
+        in the URL, AND filters the list based on the requester's role.
         """
         project_pk = self.kwargs.get('project_pk')
-        if project_pk:
-            return ProjectMember.objects.filter(project_id=project_pk).order_by('-id')
-        # Return an empty queryset if no project_pk is provided for safety
-        return ProjectMember.objects.none()
+        user = self.request.user
+
+        if not project_pk:
+            return ProjectMember.objects.none()
+
+        try:
+            requester_membership = ProjectMember.objects.get(project_id=project_pk, user=user)
+            requester_role = requester_membership.role
+        except ProjectMember.DoesNotExist:
+            return ProjectMember.objects.none()
+
+        base_queryset = ProjectMember.objects.filter(project_id=project_pk)
+
+        # 3. Apply filtering based on the user's role
+        
+        # If the user is a MANAGER, only show Developers and Testers
+        if requester_role == ProjectMember.Role.MANAGER:
+            return base_queryset.filter(
+                role__in=[ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]
+            ).order_by('-id')
+        
+        # For all other roles (OWNER, DEVELOPER, TESTER),
+        # show everyone except themselves.
+        return base_queryset.exclude(user=user).order_by('-id')
 
     def perform_create(self, serializer):
         project_pk = self.kwargs.get('project_pk')
@@ -379,15 +401,13 @@ class ManagedTeamMembersView(APIView):
         # 2. Find the unique IDs of all users who are members of those projects,
         #    excluding the manager themselves.
         team_member_ids = ProjectMember.objects.filter(
-            project_id__in=managed_project_ids
-        ).exclude(
-            user=current_user
+            project_id__in=managed_project_ids,
+            role__in=[ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]
         ).values_list('user_id', flat=True).distinct()
 
         # 3. Fetch the full User objects for those IDs.
         team_members = User.objects.filter(
-            id__in=team_member_ids,
-            role__in=[User.Role.DEVELOPER, User.Role.TESTER]
+            id__in=team_member_ids
         )
         # 4. Serialize the user data and return it as the response.
         serializer = UserSerializer(team_members, many=True)

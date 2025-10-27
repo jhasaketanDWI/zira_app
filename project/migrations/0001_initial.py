@@ -39,7 +39,7 @@ class Migration(migrations.Migration):
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
                 ('created_at', models.DateTimeField(default=django.utils.timezone.now)),
                 ('updated_at', models.DateTimeField(default=django.utils.timezone.now)),
-                ('role', models.CharField(choices=[('OWNER', 'Owner'), ('PROJECT_MANAGER', 'Project Manager'), ('DEVELOPER', 'Developer'), ('TESTER', 'Tester')], max_length=20)),
+                ('role', models.CharField(choices=[('OWNER', 'Owner'), ('MANAGER', 'Manager'), ('DEVELOPER', 'Developer'), ('TESTER', 'Tester')], max_length=20)),
                 ('created_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_created', to=settings.AUTH_USER_MODEL)),
                 ('project', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='project.project')),
                 ('updated_by', models.ForeignKey(blank=True, null=True, on_delete=django.db.models.deletion.SET_NULL, related_name='%(class)s_updated', to=settings.AUTH_USER_MODEL)),
