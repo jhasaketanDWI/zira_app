@@ -55,13 +55,14 @@ class User(AbstractUser, AuditBaseModel):
         ADMIN = "ADMIN", "Admin"
         OWNER = "OWNER", "Owner"
         MANAGER = "MANAGER", "Manager"
+        SCRUM_MASTER = "SCRUM_MASTER", "Scrum Master"  
         DEVELOPER = "DEVELOPER", "Developer"
         TESTER = "TESTER", "Tester"
 
     # We don't need a username, email will be our unique identifier
     username = None
     email = models.EmailField(unique=True)
-    role = models.CharField(max_length=50, choices=Role.choices,default=Role.DEVELOPER)
+    role = models.CharField(max_length=50, choices=Role.choices,default=Role.OWNER)
     phone = models.CharField(max_length=20, blank=True, null=True) # Add this line
 
 

@@ -1,6 +1,6 @@
 from django.urls import path, include
 from rest_framework_nested import routers
-from .views import ProjectViewSet, ProjectMemberViewSet, ProjectSummaryView, ManagedTeamMembersView
+from .views import ProjectViewSet, ProjectMemberViewSet, ProjectSummaryView, ManagedTeamMembersView, AcceptProjectInvitationView
 from task.views import TaskViewSet
 
 # This router is imported by the main project urls.py for nesting purposes.
@@ -19,6 +19,9 @@ urlpatterns = [
     path('', include(projects_router.urls)),
     path('projects/<int:project_id>/summary/', ProjectSummaryView.as_view(), name='project-summary'),
     path('managed-team-members/', ManagedTeamMembersView.as_view(), name='managed-team-members'),
+
+    path('projects/invitations/accept/', AcceptProjectInvitationView.as_view(), name='accept-project-invitation'),
+    # path('invitations/activate/', ActivateAndSetPasswordView.as_view(), name='activate-and-set-password'),
 
 ]
 

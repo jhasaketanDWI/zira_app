@@ -16,7 +16,7 @@ from rest_framework import serializers
 from common.models import Comment
 from django.contrib.contenttypes.models import ContentType
 from rest_framework.exceptions import PermissionDenied
-
+from user.models import User
 
 
 
@@ -239,16 +239,32 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Filter sprints belonging to projects where the user is owner or member
         queryset = Task.objects.filter(
         Q(project__owner=user) | Q(project__projectmember__user=user)
     ).distinct()
+        base_queryset = Task.objects.filter(
+            Q(project__owner=user) | Q(project__projectmember__user=user)
+        )
+        privileged_roles = [
+            User.Role.OWNER,
+            User.Role.ADMIN,
+            User.Role.MANAGER,
+            User.Role.SCRUM_MASTER  # Added based on your request
+        ]
+
+        # 3. Check the user's role
+        if user.role not in privileged_roles:
+            # This user is a 'DEVELOPER' or another restricted role.
+            # Filter the query to *only* tasks where they are an assignee.
+            # 'assignees__user' looks through the ProjectMember M2M to find the user.
+            base_queryset = base_queryset.filter(assignees__user=user)
+
          # Check if the URL is nested under a project
         if 'project_pk' in self.kwargs:
             project_pk = self.kwargs['project_pk']
             queryset = queryset.filter(project_id=project_pk)
 
-        return queryset
+        return base_queryset.order_by('-id').distinct()
     # --- Helper method for partial updates ---
 
     def _update_task_field(self, request, pk, serializer_class):

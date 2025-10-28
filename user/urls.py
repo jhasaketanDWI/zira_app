@@ -16,7 +16,8 @@ from .views import(
     UserRoleUpdateView,
     UserRolesView,
     FilteredUserListView,
-    ManagerTeamListView
+    ManagerTeamListView,
+    CurrentUserView,
     )
 
 from rest_framework_simplejwt.views import (
@@ -36,6 +37,9 @@ urlpatterns = [
     # Custom signup endpoints
     path('signup/user/', UserSignUpView.as_view(), name='user-signup'),
     path('signup/admin/', AdminSignUpView.as_view(), name='admin-signup'),
+
+    path('admin/users/me/', CurrentUserView.as_view(), name='admin-me'),
+    path('users/me/', CurrentUserView.as_view(), name='user-me'),
     
    # JWT Authentication endpoints
     path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'), 

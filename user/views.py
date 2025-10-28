@@ -7,6 +7,7 @@ from rest_framework.permissions import AllowAny, IsAdminUser, IsAuthenticated
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import MyTokenObtainPairSerializer
 from rest_framework.views import APIView
+from project.models import ProjectInvitation
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.core.mail import send_mail
@@ -34,6 +35,18 @@ from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
 from rest_framework.decorators import action
 
+class CurrentUserView(generics.RetrieveAPIView):
+    """
+    An endpoint to get the details of the currently authenticated user.
+    """
+    serializer_class = UserSerializer
+    permission_classes = [IsAuthenticated] # Only logged-in users can access
+
+    def get_object(self):
+        """
+        Returns the currently authenticated user.
+        """
+        return self.request.user
 class UserViewSet(viewsets.ModelViewSet):
     """
     A ViewSet for OWNERs and ADMINs to view, create, and edit all users.
@@ -41,7 +54,22 @@ class UserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all().order_by('-id').filter(is_deleted=False)
     
     permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
-
+    def get_queryset(self):
+        """
+        Dynamically filter the queryset.
+        - Exclude soft-deleted users.
+        - If the user is an OWNER, exclude them from the list.
+        """
+        user = self.request.user
+        base_queryset = User.objects.all().order_by('-id').filter(is_deleted=False)
+        
+        # Check if the user is authenticated and has the OWNER role
+        if user.is_authenticated and user.role == User.Role.OWNER:
+            # Exclude the owner from the list
+            return base_queryset.exclude(id=user.id)
+        
+        # For Admins, return the full list
+        return base_queryset
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
             return AdminUserManagementSerializer
@@ -129,7 +157,7 @@ class TeamStatsView(APIView):
             try:
                 managed_project_ids = ProjectMember.objects.filter(
                     user=user, 
-                    role="PROJECT_MANAGER"
+                    role="MANAGER"
                 ).values_list('project_id', flat=True)
 
                 if not managed_project_ids:
@@ -149,7 +177,7 @@ class TeamStatsView(APIView):
                 
                 project_manager_user_ids = ProjectMember.objects.filter(
                     project_id__in=managed_project_ids,
-                    role="PROJECT_MANAGER"
+                    role="MANAGER"
                 ).values_list('user_id', flat=True).distinct()
 
                 # 5. Get all users who are members of those projects...
@@ -309,38 +337,93 @@ class InviteUserView(generics.CreateAPIView):
         # headers = self.get_success_headers(serializer.data)
         # return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
 
-class SetPasswordView(generics.GenericAPIView):
+# class SetPasswordView(generics.GenericAPIView):
+#     """
+#     API endpoint for an invited user to set their password and activate their account.
+#     POST /api/users/set-password/
+#     """
+#     serializer_class = SetPasswordSerializer
+#     permission_classes = [AllowAny]
+
+#     def post(self, request, *args, **kwargs):
+#         serializer = self.get_serializer(data=request.data)
+#         serializer.is_valid(raise_exception=True)
+
+#         token = serializer.validated_data['token']
+#         password = serializer.validated_data['password']
+
+#         try:
+#             invitation = Invitation.objects.get(token=token, status=Invitation.Status.PENDING)
+#             user = User.objects.get(email=invitation.email)
+
+#             user.set_password(password)
+#             user.is_active = True
+#             user.save()
+
+#             invitation.status = Invitation.Status.ACCEPTED
+#             invitation.save()
+
+#             return Response({"message": "Password set successfully. You can now log in."}, status=status.HTTP_200_OK)
+
+#         except (Invitation.DoesNotExist, User.DoesNotExist):
+#             return Response({"error": "Invalid token or user not found."}, status=status.HTTP_400_BAD_REQUEST)
+
+class SetPasswordView(APIView):
     """
-    API endpoint for an invited user to set their password and activate their account.
-    POST /api/users/set-password/
+    A "smart" view that activates a user's account and sets their password.
+    It can handle tokens from EITHER a system-level invitation (user.Invitation)
+    OR a project-level invitation (project.ProjectInvitation).
     """
-    serializer_class = SetPasswordSerializer
     permission_classes = [AllowAny]
+    serializer_class = SetPasswordSerializer # Use your existing serializer for validation
 
     def post(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        token_str = request.data.get('token')
+        if not token_str:
+            return Response({'error': 'Token is required.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        token = serializer.validated_data['token']
+        # We need to find the user, but they could be from one of two tables.
+        user_to_activate = None
+        invitation_to_accept = None
+        is_project_invite = False
+
+        # --- Try 1: Check for a Project Invitation token ---
+        try:
+            project_invite = ProjectInvitation.objects.get(token=token_str, status=ProjectInvitation.Status.PENDING)
+            user_to_activate = project_invite.user_to_invite
+            invitation_to_accept = project_invite
+            is_project_invite = True
+        except ProjectInvitation.DoesNotExist:
+            pass # Not a project invite, so we check the system invites next
+
+        # --- Try 2: Check for a System Invitation token (your old logic) ---
+        if not user_to_activate:
+            try:
+                system_invite = Invitation.objects.get(token=token_str, status=Invitation.Status.PENDING)
+                # Find the inactive user by email
+                user_to_activate = User.objects.get(email__iexact=system_invite.email, is_active=False)
+                invitation_to_accept = system_invite
+            except (Invitation.DoesNotExist, User.DoesNotExist):
+                # Token is not in EITHER table
+                return Response({'error': 'Invalid or expired invitation token.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # At this point, we have a valid `user_to_activate` and `invitation_to_accept`
+        
+        # Use your serializer to validate the password
+        serializer = self.serializer_class(data=request.data)
+        serializer.is_valid(raise_exception=True)
         password = serializer.validated_data['password']
 
-        try:
-            invitation = Invitation.objects.get(token=token, status=Invitation.Status.PENDING)
-            user = User.objects.get(email=invitation.email)
+        # Activate the user and set the password
+        user_to_activate.set_password(password)
+        user_to_activate.is_active = True
+        user_to_activate.save()
 
-            user.set_password(password)
-            user.is_active = True
-            user.save()
+        # Mark the invitation as accepted
+        invitation_to_accept.status = "ACCEPTED" # Both models use "ACCEPTED"
+        invitation_to_accept.save()
 
-            invitation.status = Invitation.Status.ACCEPTED
-            invitation.save()
-
-            return Response({"message": "Password set successfully. You can now log in."}, status=status.HTTP_200_OK)
-
-        except (Invitation.DoesNotExist, User.DoesNotExist):
-            return Response({"error": "Invalid token or user not found."}, status=status.HTTP_400_BAD_REQUEST)
-
-
+        return Response({'status': 'Account activated and password set successfully.'}, status=status.HTTP_200_OK)
 class ManagerTeamListView(generics.ListAPIView):
     """
     API endpoint for a Project Manager to see their team members.
@@ -363,7 +446,7 @@ class ManagerTeamListView(generics.ListAPIView):
         try:
             managed_project_ids = ProjectMember.objects.filter(
                 user=user, 
-                role="PROJECT_MANAGER" # Using the project-specific role
+                role="MANAGER" # Using the project-specific role
             ).values_list('project_id', flat=True)
 
             if not managed_project_ids.exists():
@@ -372,7 +455,7 @@ class ManagerTeamListView(generics.ListAPIView):
             
             project_manager_user_ids = ProjectMember.objects.filter(
                 project_id__in=managed_project_ids,
-                role="PROJECT_MANAGER"
+                role="MANAGER"
             ).values_list('user_id', flat=True).distinct()
 
             queryset = User.objects.filter(

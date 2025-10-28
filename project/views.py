@@ -3,9 +3,9 @@ from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.decorators import action
 from django.db.models import Q
-from .models import( Project,ProjectMember)
+from .models import( Project,ProjectMember, ProjectInvitation)
 from rest_framework import viewsets
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from .serializers import(ProjectSerializer, ProjectMemberSerializer, ProjectDetailSerializer,ActivityLogSerializer,_UserNestedSerializer, ProjectMemberBulkAssignByRoleSerializer, ProjectMemberInviteSerializer)
 from rest_framework.views import APIView
 from task.models import Task, ActivityLog
@@ -231,12 +231,13 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             "assigned_members": success_responses,
             "failed_assignments": error_responses
         }, status=status.HTTP_201_CREATED)
-   
+    
     @action(detail=False, methods=['post'], url_path='invite-member')
     def invite_member(self, request, project_pk=None):
         """
-        Handles inviting a NEW user and simultaneously adding them to this project.
-        Permissions are checked based on the inviter's role within the project.
+        Handles inviting a user (either new or existing) to a project.
+        - If new, creates an inactive user and sends a set-password link.
+        - If existing, sends an accept-invitation link.
         """
         try:
             project = Project.objects.get(pk=project_pk)
@@ -252,9 +253,9 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         email_to_invite = serializer.validated_data['email']
         project_role_to_assign = serializer.validated_data['role']
 
-        # Permission Check
+        # 1. Permission Check
         can_invite = False
-        if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.MANAGER , ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
+        if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.MANAGER,ProjectMember.Role.SCRUM_MASTER, ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
             can_invite = True
         elif requester_role == ProjectMember.Role.MANAGER and project_role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
             can_invite = True
@@ -262,39 +263,202 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         if not can_invite:
             return Response({'error': f"As a {requester_role}, you do not have permission to invite a user with the role {project_role_to_assign}."}, status=status.HTTP_403_FORBIDDEN)
         
-        if User.objects.filter(email__iexact=email_to_invite).exists():
-            return Response({'error': 'A user with this email already exists. Please add them as a member directly.'}, status=status.HTTP_400_BAD_REQUEST)
-        if Invitation.objects.filter(email__iexact=email_to_invite).exists():
-            return Response({'error': 'An invitation for this email has already been sent.'}, status=status.HTTP_400_BAD_REQUEST)
+        # 2. Check if already a member or already has a pending invite
+        if ProjectMember.objects.filter(project=project, user__email__iexact=email_to_invite).exists():
+            return Response({'error': 'This user is already a member of this project.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        global_role_map = {
-            ProjectMember.Role.MANAGER : User.Role.MANAGER,
-            ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
-            ProjectMember.Role.TESTER: User.Role.TESTER,
-        }
-        global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
+        if ProjectInvitation.objects.filter(project=project, email__iexact=email_to_invite, status=ProjectInvitation.Status.PENDING).exists():
+            return Response({'error': 'An invitation has already been sent to this email address for this project.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        invitation = Invitation.objects.create(
-            email=email_to_invite, 
-            role=global_role,
-            invited_by=request.user
-        )
-        new_user = User.objects.create_user(
-            email=invitation.email, password=None, role=invitation.role, is_active=False
-        )
-        ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
+        # 3. --- HYBRID LOGIC ---
+        existing_user = User.objects.filter(email__iexact=email_to_invite).first()
 
-        invitation_link = f"http://localhost:5173/set-password?token={invitation.token}"
-        send_mail(
-            subject=f'You are invited to join Project: {project.name}!',
-            message=f"Hello, please click the link to set your password and join the project: {invitation_link}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[invitation.email],
-        )
+        if existing_user:
+            # --- CASE 1: USER ALREADY EXISTS ---
+            # Your new feature logic
+            invitation = ProjectInvitation.objects.create(
+                project=project,
+                email=email_to_invite,
+                role=project_role_to_assign,
+                invited_by=request.user,
+                user_to_invite=existing_user
+            )
+            
+            accept_link = f"http://localhost:5173/accept-project-invite?token={invitation.token}"
+            subject = f"You are invited to join Project: {project.name}"
+            message = (
+                f"Hello {existing_user.first_name or existing_user.email},\n\n"
+                f"You've been invited to join the project '{project.name}' as a {project_role_to_assign}.\n"
+                f"Please click the link to accept: {accept_link}"
+            )
+            
+            send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
+            
+            return Response({
+                'status': 'Invitation sent successfully. The user is already registered and needs to accept.'
+            }, status=status.HTTP_201_CREATED)
+        else:
+            # --- CASE 2: USER IS NEW ---
+            # Your old logic, modified to use the new invitation model
+            
+            # 1. Map ProjectRole to global UserRole
+            global_role_map = {
+                ProjectMember.Role.MANAGER: User.Role.MANAGER,
+                ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
+                ProjectMember.Role.TESTER: User.Role.TESTER,
+            }
+            global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
+
+            # 2. Create the inactive user (as you wanted)
+            new_user = User.objects.create_user(
+                email=email_to_invite, 
+                password=None, 
+                role=global_role, 
+                is_active=False # User is inactive
+            )
+            
+            # 3. Add them to the project (as you wanted)
+            ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
+
+            # 4. Create the new invitation record to track the token
+            invitation = ProjectInvitation.objects.create(
+                project=project,
+                email=email_to_invite,
+                role=project_role_to_assign,
+                invited_by=request.user,
+                user_to_invite=new_user,
+                status=ProjectInvitation.Status.PENDING # Mark as pending
+            )
+            
+            # 5. Send the set password link
+            # Point this to your ORIGINAL set-password frontend page
+            set_password_link = f"http://localhost:5173/set-password?token={invitation.token}"
+            
+            subject = f"You are invited to join Project: {project.name}"
+            message = (
+                f"Hello,\n\n"
+                f"You've been invited to join the project '{project.name}'.\n"
+                f"Please click the link to set your password and activate your account: {set_password_link}"
+            )
+            
+            send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
+
+            return Response({
+                'status': 'Invitation sent. A new inactive user has been created and added to the project.'
+            }, status=status.HTTP_201_CREATED)
+
+        # else:
+        #     # --- CASE 2: USER IS NEW ---
+        #     # Your old logic, but modified to use the new invitation model
+            
+        #     # Map ProjectRole to global UserRole
+        #     global_role_map = {
+        #         ProjectMember.Role.MANAGER: User.Role.MANAGER,
+        #         ProjectMember.Role.SCRUM_MASTER : User.Role.SCRUM_MASTER,
+
+        #         ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
+        #         ProjectMember.Role.TESTER: User.Role.TESTER,
+        #     }
+        #     global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
+
+        #     # 1. Create the inactive user (as you wanted)
+        #     new_user = User.objects.create_user(
+        #         email=email_to_invite, 
+        #         password=None, 
+        #         role=global_role, 
+        #         is_active=False # User is inactive
+        #     )
+            
+        #     # 2. Add them to the project (as you wanted)
+        #     ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
+
+        #     # 3. Create the new invitation record to track the token
+        #     invitation = ProjectInvitation.objects.create(
+        #         project=project,
+        #         email=email_to_invite,
+        #         role=project_role_to_assign,
+        #         invited_by=request.user,
+        #         user_to_invite=new_user,
+        #         status=ProjectInvitation.Status.PENDING # Mark as pending
+        #     )
+            
+        #     # 4. Send the set password link
+        #     set_password_link = f"http://localhost:5173/activate-and-set-password?token={invitation.token}"
+        #     subject = f"You are invited to join Project: {project.name}"
+        #     message = (
+        #         f"Hello,\n\n"
+        #         f"You've been invited to join the project '{project.name}'.\n"
+        #         f"Please click the link to set your password and activate your account: {set_password_link}"
+        #     )
+            
+        #     send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
+
+        #     return Response({
+        #         'status': 'Invitation sent. A new inactive user has been created and added to the project.'
+        #     }, status=status.HTTP_201_CREATED)
+    # @action(detail=False, methods=['post'], url_path='invite-member')
+    # def invite_member(self, request, project_pk=None):
+    #     """
+    #     Handles inviting a NEW user and simultaneously adding them to this project.
+    #     Permissions are checked based on the inviter's role within the project.
+    #     """
+    #     try:
+    #         project = Project.objects.get(pk=project_pk)
+    #     except Project.DoesNotExist:
+    #         return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    #     requester_role = self._get_requester_role(self.request.user, project)
+    #     if not requester_role:
+    #          return Response({"error": "You must be a member of this project to invite others."}, status=status.HTTP_403_FORBIDDEN)
+
+    #     serializer = ProjectMemberInviteSerializer(data=request.data)
+    #     serializer.is_valid(raise_exception=True)
+    #     email_to_invite = serializer.validated_data['email']
+    #     project_role_to_assign = serializer.validated_data['role']
+
+    #     # Permission Check
+    #     can_invite = False
+    #     if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.MANAGER , ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
+    #         can_invite = True
+    #     elif requester_role == ProjectMember.Role.MANAGER and project_role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
+    #         can_invite = True
         
-        return Response({
-            'status': 'Invitation sent successfully. The user has been added to the project pending activation.'
-        }, status=status.HTTP_201_CREATED)
+    #     if not can_invite:
+    #         return Response({'error': f"As a {requester_role}, you do not have permission to invite a user with the role {project_role_to_assign}."}, status=status.HTTP_403_FORBIDDEN)
+        
+    #     if User.objects.filter(email__iexact=email_to_invite).exists():
+    #         return Response({'error': 'A user with this email already exists. Please add them as a member directly.'}, status=status.HTTP_400_BAD_REQUEST)
+    #     if Invitation.objects.filter(email__iexact=email_to_invite).exists():
+    #         return Response({'error': 'An invitation for this email has already been sent.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    #     global_role_map = {
+    #         ProjectMember.Role.MANAGER : User.Role.MANAGER,
+    #         ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
+    #         ProjectMember.Role.TESTER: User.Role.TESTER,
+    #     }
+    #     global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
+
+    #     invitation = Invitation.objects.create(
+    #         email=email_to_invite, 
+    #         role=global_role,
+    #         invited_by=request.user
+    #     )
+    #     new_user = User.objects.create_user(
+    #         email=invitation.email, password=None, role=invitation.role, is_active=False
+    #     )
+    #     ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
+
+    #     invitation_link = f"http://localhost:5173/set-password?token={invitation.token}"
+    #     send_mail(
+    #         subject=f'You are invited to join Project: {project.name}!',
+    #         message=f"Hello, please click the link to set your password and join the project: {invitation_link}",
+    #         from_email=settings.DEFAULT_FROM_EMAIL,
+    #         recipient_list=[invitation.email],
+    #     )
+        
+    #     return Response({
+    #         'status': 'Invitation sent successfully. The user has been added to the project pending activation.'
+    #     }, status=status.HTTP_201_CREATED)
     
     
     def _get_requester_role(self, user, project):
@@ -460,3 +624,79 @@ class ProjectSummaryView(APIView):
         }
 
         return Response(response_data)
+
+
+class AcceptProjectInvitationView(APIView):
+    """
+    ENDPOINT 1: For an EXISTING, LOGGED-IN user to accept.
+    """
+    permission_classes = [IsAuthenticated] # User must be logged in
+
+    def post(self, request, *args, **kwargs):
+        token = request.data.get('token')
+        if not token:
+            return Response({'error': 'Token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            invitation = ProjectInvitation.objects.get(token=token, status=ProjectInvitation.Status.PENDING)
+        except ProjectInvitation.DoesNotExist:
+            return Response({'error': 'Invalid or expired invitation token.'}, status=status.HTTP_404_NOT_FOUND)
+
+        if invitation.email.lower() != request.user.email.lower():
+            return Response({'error': 'This invitation is not for you.'}, status=status.HTTP_403_FORBIDDEN)
+            
+        if ProjectMember.objects.filter(project=invitation.project, user=request.user).exists():
+            invitation.status = ProjectInvitation.Status.ACCEPTED
+            invitation.save()
+            return Response({'error': 'You are already a member of this project.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # All checks passed. Add the user to the project.
+        member = ProjectMember.objects.create(
+            project=invitation.project,
+            user=request.user,
+            role=invitation.role
+        )
+        
+        invitation.status = ProjectInvitation.Status.ACCEPTED
+        invitation.save()
+
+        serializer = ProjectMemberSerializer(member)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class ActivateAndSetPasswordView(APIView):
+    """
+    ENDPOINT 2: For a NEW, INACTIVE user to set password and activate.
+    """
+    permission_classes = [AllowAny] # Anyone with a valid token can use this
+
+    def post(self, request, *args, **kwargs):
+        token = request.data.get('token')
+        if not token:
+            return Response({'error': 'Token is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 1. Verify token
+        try:
+            invitation = ProjectInvitation.objects.get(token=token, status=ProjectInvitation.Status.PENDING)
+        except ProjectInvitation.DoesNotExist:
+            return Response({'error': 'Invalid or expired invitation token.'}, status=status.HTTP_404_NOT_FOUND)
+
+        # 2. Get the inactive user
+        user = invitation.user_to_invite
+        if not user or user.is_active:
+             return Response({'error': 'This invitation is invalid or the user is already active.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # 3. Get and set password
+        password = request.data.get('password')
+        if not password:
+             return Response({'error': 'Password is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        user.set_password(password)
+        user.is_active = True
+        user.save()
+
+        # 4. Mark invitation as accepted
+        invitation.status = ProjectInvitation.Status.ACCEPTED
+        invitation.save()
+
+        return Response({'status': 'Account activated and password set successfully.'}, status=status.HTTP_200_OK)
