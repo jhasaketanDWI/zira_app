@@ -168,7 +168,7 @@ const ManageTeamModal = ({ project, onClose }) => {
         const roleApiMap = {
             developers: 'developer',
             testers: 'tester',
-            managers: 'PROJECT_MANAGER'
+            managers: 'MANAGER'
         };
 
         try {

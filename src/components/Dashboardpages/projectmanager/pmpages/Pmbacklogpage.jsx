@@ -552,11 +552,17 @@ const selectedItem = selectedItemId ? boardData.items[selectedItemId] : null;
         break;
 
       case "priority":
-      case "title":
+        fullUrl += "priority/";
         payload = { ...updates };
         if (payload.priority) {
           payload.priority = payload.priority.toUpperCase();
         }
+        break;
+
+      case "title":
+       payload = {
+          title: updates.title,
+        };
         break;
 
       default:

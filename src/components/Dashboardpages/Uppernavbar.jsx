@@ -71,7 +71,7 @@ export default function UpperNavbar() {
       const userId = localStorage.getItem('userId');
       const authToken = localStorage.getItem('authToken');
 
-      const response = await fetch(`http://localhost:8000/api/users/${userId}`, {
+      const response = await fetch(`http://localhost:8000/api/admin/users/${userId}/`, {
           method: 'GET',
           headers: {
             'Content-Type': 'application/json',
