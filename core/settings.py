@@ -40,6 +40,8 @@ EMAIL_HOST_USER = 'jhasaketansa86@gmail.com'
 EMAIL_HOST_PASSWORD = 'vtyu ookx ctth spbk' 
 DEFAULT_FROM_EMAIL = 'jhasaketansa86@gmail.com'
 
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -62,6 +64,7 @@ INSTALLED_APPS = [
     'testCase',
     'billing',
     'common',
+    'team',
 
 
     # Allauth apps

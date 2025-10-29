@@ -64,3 +64,22 @@ class IsOwnerAdminOrManager(permissions.BasePermission):
             User.Role.ADMIN, 
             User.Role.MANAGER
         ]
+    
+
+class IsOwnerAdminOrScrumMaster(permissions.BasePermission):
+    """
+    Custom permission to only allow users with the global role of
+    Owner, Admin, or Scrum Master.
+    """
+    message = "You do not have permission to create a team. Only Owners, Admins, and Scrum Masters are allowed."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        # Check if the user's role is one of the allowed roles [cite: models.py]
+        return request.user.role in [
+            User.Role.OWNER,
+            User.Role.ADMIN,
+            User.Role.SCRUM_MASTER
+        ]

@@ -21,6 +21,8 @@ api_patterns = [
     path('', include('task.urls')),
     path('', include('billing.urls')),
     path('', include('testCase.urls')),
+    path('', include('team.urls')),
+    
     
     # Include the nested router for URLs like /projects/{id}/testcases/
     path('', include(testcases_router.urls)),
