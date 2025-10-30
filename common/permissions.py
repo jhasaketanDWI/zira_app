@@ -83,3 +83,4 @@ class IsOwnerAdminOrScrumMaster(permissions.BasePermission):
             User.Role.ADMIN,
             User.Role.SCRUM_MASTER
         ]
+

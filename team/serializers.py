@@ -36,10 +36,11 @@ class TeamDetailSerializer(serializers.ModelSerializer):
 class TeamListSerializer(serializers.ModelSerializer):
     """A simple serializer for the 'List' view (GET /api/teams/)."""
     member_count = serializers.SerializerMethodField()
+    team_memberships = TeamMemberSerializer(many=True, read_only=True)
 
     class Meta:
         model = Team
-        fields = ['id', 'name', 'about', 'member_count']
+        fields = ['id', 'name', 'about', 'member_count', 'team_memberships']
 
     def get_member_count(self, obj):
         # Count only accepted members
@@ -152,3 +153,93 @@ class TeamCreateSerializer(serializers.ModelSerializer):
 
         return team
 
+
+class TeamInviteSerializer(serializers.Serializer):
+    """
+    Serializer for inviting new members to an *existing* team.
+    Used by the 'invite_members' custom action on the TeamViewSet.
+    """
+    members_to_invite = serializers.ListField(
+        child=serializers.EmailField(),
+        write_only=True,
+        required=True,
+        help_text="List of emails of *existing, active* users to invite."
+    )
+
+    def validate_members_to_invite(self, emails):
+        """
+        Validates the list of emails.
+        (This logic is copied directly from your TeamCreateSerializer)
+        """
+        if not emails:
+            return []
+
+        validated_users = []
+        invalid_emails = []
+        
+        for email in set(email.lower() for email in emails):
+            try:
+                user = User.objects.get(email__iexact=email, is_active=True)
+                validated_users.append(user)
+            except User.DoesNotExist:
+                invalid_emails.append(email)
+
+        if invalid_emails:
+            raise serializers.ValidationError(
+                f"The following users do not exist or are not active: {', '.join(invalid_emails)}"
+            )
+            
+        return validated_users # Return user objects
+
+    def save(self):
+        """
+        This custom .save() method creates the invitations.
+        It's called by the view.
+        """
+        # Get data passed in from the view's context
+        team = self.context['team']
+        requesting_user = self.context['request'].user
+        users_to_invite = self.validated_data['members_to_invite']
+
+        successfully_invited_emails = []
+        already_in_team_emails = []
+
+        with transaction.atomic():
+            for user_to_invite in users_to_invite:
+                
+                # Check if user is already in the team
+                is_already_member = TeamMember.objects.filter(
+                    team=team, 
+                    user=user_to_invite
+                ).exists()
+
+                if is_already_member:
+                    already_in_team_emails.append(user_to_invite.email)
+                    continue
+
+                # --- "Smart Role" logic ---
+                team_role = user_to_invite.role
+                
+                # 4. Create the PENDING TeamMember invitation
+                TeamMember.objects.create(
+                    team=team,
+                    user=user_to_invite,
+                    role=team_role,
+                    status=TeamMember.MemberStatus.PENDING,
+                    invited_by=requesting_user
+                )
+
+                # 5. Send email notification
+                send_mail(
+                    subject=f"You've been invited to the '{team.name}' team!",
+                    message=f"Hi {user_to_invite.first_name or user_to_invite.email},\n\n{requesting_user.email} has invited you to join their team.\n\nPlease log in to your account and check your pending invitations to accept.",
+                    from_email=settings.DEFAULT_FROM_EMAIL,
+                    recipient_list=[user_to_invite.email],
+                )
+                successfully_invited_emails.append(user_to_invite.email)
+
+        # Return the lists for the view's response
+        return {
+            "invitations_sent_to": successfully_invited_emails,
+            "users_already_in_team": already_in_team_emails
+        }

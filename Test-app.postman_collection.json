@@ -580,138 +580,6 @@
 					]
 				},
 				{
-					"name": "Teams",
-					"item": [
-						{
-							"name": "Send Team Invite(OWNER and  SCRUM_MASTER)",
-							"item": [
-								{
-									"name": "create and invite to teams",
-									"request": {
-										"method": "POST",
-										"header": [],
-										"body": {
-											"mode": "raw",
-											"raw": "{\n    \"email\": \"tester@gmail.com\",\n    \"password\": \"Password@123\",\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\",\n    \"role\": \"TESTER\"\n}",
-											"options": {
-												"raw": {
-													"language": "json"
-												}
-											}
-										},
-										"url": {
-											"raw": "{{baseUrl}}/teams/",
-											"host": [
-												"{{baseUrl}}"
-											],
-											"path": [
-												"teams",
-												""
-											]
-										}
-									},
-									"response": []
-								}
-							]
-						},
-						{
-							"name": "Invited Users Operations",
-							"item": [
-								{
-									"name": "get pending invitations",
-									"protocolProfileBehavior": {
-										"disableBodyPruning": true
-									},
-									"request": {
-										"method": "GET",
-										"header": [],
-										"body": {
-											"mode": "raw",
-											"raw": "{\n    \"email\": \"tester@gmail.com\",\n    \"password\": \"Password@123\",\n    \"first_name\": \"Test\",\n    \"last_name\": \"User\",\n    \"role\": \"TESTER\"\n}"
-										},
-										"url": {
-											"raw": "{{baseUrl}}/teams/invitations/pending/",
-											"host": [
-												"{{baseUrl}}"
-											],
-											"path": [
-												"teams",
-												"invitations",
-												"pending",
-												""
-											]
-										}
-									},
-									"response": []
-								},
-								{
-									"name": "accept teaminvitation",
-									"request": {
-										"method": "POST",
-										"header": [],
-										"body": {
-											"mode": "raw",
-											"raw": "{\n    \"action\":\"accept\"\n}",
-											"options": {
-												"raw": {
-													"language": "json"
-												}
-											}
-										},
-										"url": {
-											"raw": "{{baseUrl}}/teams/invitations/{{invitation_id}}/respond/",
-											"host": [
-												"{{baseUrl}}"
-											],
-											"path": [
-												"teams",
-												"invitations",
-												"{{invitation_id}}",
-												"respond",
-												""
-											]
-										}
-									},
-									"response": []
-								}
-							]
-						},
-						{
-							"name": "get Team Details",
-							"protocolProfileBehavior": {
-								"disableBodyPruning": true
-							},
-							"request": {
-								"method": "GET",
-								"header": [],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n    \"action\":\"accept\"\n}"
-								},
-								"url": {
-									"raw": "{{baseUrl}}/teams/",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"teams",
-										""
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "delete a team",
-							"request": {
-								"method": "GET",
-								"header": []
-							},
-							"response": []
-						}
-					]
-				},
-				{
 					"name": "Refresh_token",
 					"request": {
 						"method": "POST",
@@ -3319,20 +3187,206 @@
 			]
 		},
 		{
-			"name": "New Request",
-			"request": {
-				"method": "GET",
-				"header": []
-			},
-			"response": []
-		},
-		{
-			"name": "New Request",
-			"request": {
-				"method": "GET",
-				"header": []
-			},
-			"response": []
+			"name": "Teams",
+			"item": [
+				{
+					"name": "Send Team Invite(OWNER and  SCRUM_MASTER)",
+					"item": [
+						{
+							"name": "create and invite to teams",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Team Phoenix-233\",\n    \"about\": \"Our first real team.\",\n    \"members_to_invite\": [\n        \"jhasketansa63@gmail.com\",\n        \"manager@example.com\"\n    ]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/teams/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"teams",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "invite a user to team",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"members_to_invite\": [\"jhasaketansa86@gmail.com\"]\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/teams/{{team_id}}/invite/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"teams",
+										"{{team_id}}",
+										"invite",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "add people to organization",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"email\": \"bsajuniorl9@gmail.com\",\r\n    \"role\": \"MANAGER\"\r\n    }",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/users/invite/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"users",
+										"invite",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Invited Users Operations",
+					"item": [
+						{
+							"name": "get pending invitations",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											""
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": ""
+								},
+								"url": {
+									"raw": "{{baseUrl}}/teams/invitations/pending/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"teams",
+										"invitations",
+										"pending",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "accept teaminvitation",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"action\":\"accept\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/teams/invitations/{{invitation_id}}/respond/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"teams",
+										"invitations",
+										"{{invitation_id}}",
+										"respond",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "get Team Details",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"action\":\"accept\"\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/teams/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"teams",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "delete a team",
+					"request": {
+						"method": "GET",
+						"header": []
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"auth": {
@@ -3387,6 +3441,11 @@
 		},
 		{
 			"key": "owner_id",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "team_id",
 			"value": "",
 			"type": "default"
 		}

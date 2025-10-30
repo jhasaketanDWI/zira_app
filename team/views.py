@@ -1,6 +1,10 @@
 from .models import  Team, TeamMember
 from .serializers import(
-     TeamListSerializer, TeamDetailSerializer, TeamCreateSerializer, TeamMemberSerializer
+     TeamListSerializer,
+       TeamDetailSerializer, 
+       TeamCreateSerializer, 
+       TeamMemberSerializer,
+         TeamInviteSerializer
      )
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -9,8 +13,10 @@ from rest_framework import viewsets, generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
+from rest_framework.decorators import action
 
 from common.permissions import IsOwnerAdminOrScrumMaster
+from .permissions import IsTeamAdmin
 
 
 class TeamViewSet(viewsets.ModelViewSet):
@@ -79,19 +85,43 @@ class TeamViewSet(viewsets.ModelViewSet):
         
         # Get the lists saved by the serializer
         invited_emails = serializer.validated_data.get('successfully_invited_emails', [])
-        already_in_team_emails = serializer.validated_data.get('already_in_team_emails', [])
+        # already_in_team_emails = serializer.validated_data.get('already_in_team_emails', [])
         
         # Build the custom response
         response_data = {
             "status": "Team created successfully.",
             "team_details": serializer.data, # Basic team info (name, about, id)
             "invitations_sent_to": invited_emails,
-            "users_already_in_team": already_in_team_emails
+            # "users_already_in_team": already_in_team_emails
         }
         
         headers = self.get_success_headers(serializer.data)
         return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
+    
+    @action(detail=True,methods=['post'],permission_classes=[IsAuthenticated, (IsTeamAdmin | IsOwnerAdminOrScrumMaster)],
+        url_path='invite')
+    def invite_members(self, request, pk=None):
+        """
+        An endpoint to invite new members to an existing team.
+        Allowed for Team Admins OR global Owner/Admin/Scrum Masters.
+        """
+        team = self.get_object()
+        
+        serializer = TeamInviteSerializer(
+            data=request.data,
+            context={'team': team, 'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        
+        invitation_data = serializer.save()
 
+        response_data = {
+            "status": "Invitations sent successfully.",
+            "team_id": team.id,
+            "team_name": team.name,
+            **invitation_data
+        }
+        return Response(response_data, status=status.HTTP_200_OK)
 
 class MyTeamInvitationsView(generics.ListAPIView):
     """
