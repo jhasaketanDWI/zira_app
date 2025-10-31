@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'billing',
     'common',
     'team',
+    'timeline',
 
 
     # Allauth apps
@@ -156,10 +157,10 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'zira_app',
+        'NAME': 'test_app',
         'HOST': 'localhost',
         'USER': 'root',
-        'PASSWORD': 'root',
+        'PASSWORD': 'Mipaltan@10',
     }
 }
 

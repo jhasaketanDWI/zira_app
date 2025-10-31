@@ -1,10 +1,10 @@
 {
 	"info": {
-		"_postman_id": "1f755ccf-6ab5-4b79-92d5-111de95a9451",
+		"_postman_id": "9b74e385-f0e4-4374-ac52-028337b210ae",
 		"name": "Test-app",
 		"description": "Complete API collection for the Django project, structured by app.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-		"_exporter_id": "34092782"
+		"_exporter_id": "48392045"
 	},
 	"item": [
 		{
@@ -953,14 +953,13 @@
 									"raw": ""
 								},
 								"url": {
-									"raw": "{{baseUrl}}/projects/1/timeline/",
+									"raw": "{{baseUrl}}/timeline/1/",
 									"host": [
 										"{{baseUrl}}"
 									],
 									"path": [
-										"projects",
-										"1",
 										"timeline",
+										"1",
 										""
 									]
 								}
@@ -968,12 +967,61 @@
 							"response": []
 						},
 						{
-							"name": "New Request",
+							"name": "Change epic dates",
 							"request": {
-								"method": "GET",
+								"method": "PATCH",
 								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n   \"start_date\": \"2025-09-20\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
 								"url": {
-									"raw": ""
+									"raw": "{{baseUrl}}/timeline/epics/4/dates/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"timeline",
+										"epics",
+										"4",
+										"dates",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Change task dates",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"start_date\": \"2025-09-25\"\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/timeline/tasks/4/dates/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"timeline",
+										"tasks",
+										"4",
+										"dates",
+										""
+									]
 								}
 							},
 							"response": []
@@ -3382,7 +3430,10 @@
 					"name": "delete a team",
 					"request": {
 						"method": "GET",
-						"header": []
+						"header": [],
+						"url": {
+							"raw": ""
+						}
 					},
 					"response": []
 				}
@@ -3448,6 +3499,10 @@
 			"key": "team_id",
 			"value": "",
 			"type": "default"
+		},
+		{
+			"key": "user_id",
+			"value": ""
 		}
 	]
 }
