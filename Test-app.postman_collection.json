@@ -1230,13 +1230,13 @@
 										"method": "PATCH",
 										"header": [],
 										"url": {
-											"raw": "{{baseUrl}}/sprints/1/end/",
+											"raw": "{{baseUrl}}/sprints/4/end/",
 											"host": [
 												"{{baseUrl}}"
 											],
 											"path": [
 												"sprints",
-												"1",
+												"4",
 												"end",
 												""
 											]
@@ -1413,7 +1413,7 @@
 								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\n    \"name\": \"Sprint 99 - Auth MVP\",\n    \"goal\": \"Complete the core authentication features.\",\n    \"project\": 1,\n    \"start_date\": \"2025-10-01\",\n    \"end_date\": \"2025-10-14\",\n    \"epic\":1\n}",
+									"raw": "{\n    \"name\": \"Sprint 109 - Auth MVP\",\n    \"goal\": \"Complete the core authentication features.\",\n    \"project\": 2,\n    \"start_date\": \"2025-10-01\",\n    \"end_date\": \"2025-10-14\"\n    // \"epic\":1\n}",
 									"options": {
 										"raw": {
 											"language": "json"
@@ -1518,6 +1518,38 @@
 										{
 											"key": "project",
 											"value": "1"
+										}
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "check active sprint",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"action\":\"accept\"\n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/sprints/check-active/?project_id=2",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"sprints",
+										"check-active",
+										""
+									],
+									"query": [
+										{
+											"key": "project_id",
+											"value": "2"
 										}
 									]
 								}
@@ -3379,14 +3411,41 @@
 					"response": []
 				},
 				{
-					"name": "delete a team",
+					"name": "New Request",
 					"request": {
-						"method": "GET",
-						"header": []
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/teams/{{team_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"teams",
+								"{{team_id}}",
+								""
+							]
+						}
 					},
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
 		}
 	],
 	"auth": {

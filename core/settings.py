@@ -65,6 +65,7 @@ INSTALLED_APPS = [
     'billing',
     'common',
     'team',
+    'timeline',
 
 
     # Allauth apps
