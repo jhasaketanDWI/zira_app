@@ -240,6 +240,7 @@ class SprintSerializer(serializers.ModelSerializer):
             'id', 'name', 'goal', 'project', 'start_date', 'end_date',
             'duration', 'epic', 'is_active', 'is_ended', 'tasks'
         ]
+        read_only_fields = ['is_active', 'is_ended']
     def validate(self, data):
         
         start_date = data.get("start_date")

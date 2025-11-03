@@ -98,7 +98,58 @@ class SprintViewSet(viewsets.ModelViewSet):
         project = serializer.instance.project
         check_project_permission(self.request.user, project)
         serializer.save()
+   
+    @action(detail=False, methods=['get'], url_path='check-active')
+    def check_active_sprint(self, request):
+        """
+        Checks if a project has an active sprint.
+        Requires `project_id` as a query parameter.
+        Example: /api/sprints/check-active/?project_id=1
+        """
+        project_id = request.query_params.get('project_id')
 
+        if not project_id:
+            return Response(
+                {"error": "A 'project_id' query parameter is required."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            project = Project.objects.get(pk=project_id)
+        except Project.DoesNotExist:
+            return Response(
+                {"error": "Project not found."},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+        check_project_permission(
+            request.user, 
+            project, 
+            allowed_roles=[
+                User.Role.OWNER,
+                User.Role.ADMIN,
+                User.Role.MANAGER,
+                User.Role.SCRUM_MASTER
+            ]
+        )
+
+        # Find the first active sprint for this project
+        active_sprint = Sprint.objects.filter(
+            project=project, 
+            is_active=True
+        ).first()
+
+        if active_sprint:
+            serializer = self.get_serializer(active_sprint)
+            return Response({
+                "is_active_sprint": True,
+                "sprint": serializer.data
+            }, status=status.HTTP_200_OK)
+        else:
+            return Response({
+                "is_active_sprint": False,
+                "sprint": None
+            }, status=status.HTTP_200_OK)
     @action(detail=True, methods=["patch"],url_path='activate')
     def activate(self, request, pk=None):
         """Custom action to activate a sprint (only one active sprint per project)."""

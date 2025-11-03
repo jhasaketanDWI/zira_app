@@ -12,7 +12,7 @@ from rest_framework.permissions import IsAuthenticated
 from rest_framework import viewsets, generics, status
 from rest_framework.response import Response
 from rest_framework.views import APIView
-
+from user.models import User
 from rest_framework.decorators import action
 
 from common.permissions import IsOwnerAdminOrScrumMaster
@@ -31,13 +31,22 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         """
-        Users can only see teams they are an "ACCEPTED" member of.
+        --- MODIFIED ---
+        Overrides the queryset.
+        - Global Owners/Admins see ALL teams.
+        - Other users only see teams they are an "ACCEPTED" member of.
         """
-        if not self.request.user.is_authenticated:
+        user = self.request.user
+        if not user.is_authenticated:
             return Team.objects.none()
+        
+        if user.role in [User.Role.OWNER, User.Role.ADMIN]:
+            # Admins/Owners get to see all teams
+            return Team.objects.all().distinct()
             
-        return self.request.user.teams.filter(
-            team_memberships__user=self.request.user,
+
+        return user.teams.filter(
+            team_memberships__user=user,
             team_memberships__status=TeamMember.MemberStatus.ACCEPTED
         ).distinct()
 
@@ -53,14 +62,24 @@ class TeamViewSet(viewsets.ModelViewSet):
 
     def get_object(self):
         """
-        Ensure user can only 'retrieve' a team they are an accepted member of.
+        --- MODIFIED ---
+        Ensure user can 'retrieve' a team they are an accepted member of.
+        - Admins/Owners can 'retrieve' ANY team.
         """
+        user = self.request.user
         obj = get_object_or_404(Team.objects.all(), pk=self.kwargs.get('pk'))
-        if self.request.user.team_memberships.filter(
+
+        # Allow Admins/Owners to retrieve any team
+        if user.role in [User.Role.OWNER, User.Role.ADMIN]:
+            return obj
+
+        # Original logic for regular users
+        if user.team_memberships.filter(
             team=obj, 
             status=TeamMember.MemberStatus.ACCEPTED
         ).exists():
             return obj
+            
         raise Http404("You are not a member of this team.")
 
     def get_permissions(self):

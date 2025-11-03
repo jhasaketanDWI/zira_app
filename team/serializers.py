@@ -34,9 +34,15 @@ class TeamDetailSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'about', 'created_by', 'team_memberships']
 
 class TeamListSerializer(serializers.ModelSerializer):
-    """A simple serializer for the 'List' view (GET /api/teams/)."""
+    """
+    A simple serializer for the 'List' view (GET /api/teams/).
+    --- MODIFIED ---
+    - 'team_memberships' now only lists ACCEPTED members.
+    """    
     member_count = serializers.SerializerMethodField()
-    team_memberships = TeamMemberSerializer(many=True, read_only=True)
+     # This field will now be populated by the 'get_team_memberships' method
+    team_memberships = serializers.SerializerMethodField()
+    # team_memberships = TeamMemberSerializer(many=True, read_only=True)
 
     class Meta:
         model = Team
@@ -45,7 +51,24 @@ class TeamListSerializer(serializers.ModelSerializer):
     def get_member_count(self, obj):
         # Count only accepted members
         return obj.team_memberships.filter(status=TeamMember.MemberStatus.ACCEPTED).count()
-
+    def get_team_memberships(self, obj):
+        """
+        --- NEW METHOD ---
+        This method is called to populate the 'team_memberships' field.
+        It filters for *only* ACCEPTED members.
+        """
+        # Filter for members with "ACCEPTED" status
+        accepted_memberships = obj.team_memberships.filter(
+            status=TeamMember.MemberStatus.ACCEPTED
+        ).select_related('user') # Optimize DB query
+        
+        # Serialize that filtered list using the existing TeamMemberSerializer
+        serializer = TeamMemberSerializer(
+            accepted_memberships, 
+            many=True, 
+            read_only=True
+        )
+        return serializer.data
 class TeamCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating a new team (POST /api/teams/).
@@ -58,9 +81,10 @@ class TeamCreateSerializer(serializers.ModelSerializer):
         help_text="List of emails of *existing, active* users to invite."
     )
 
+
     class Meta:
         model = Team
-        fields = ['name', 'about', 'members_to_invite']
+        fields = ['id','name', 'about', 'members_to_invite']
         
     def validate_members_to_invite(self, emails):
         """

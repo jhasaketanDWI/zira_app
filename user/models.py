@@ -55,7 +55,7 @@ class User(AbstractUser, AuditBaseModel):
         ADMIN = "ADMIN", "Admin"
         OWNER = "OWNER", "Owner"
         MANAGER = "MANAGER", "Manager"
-        SCRUM_MASTER = "SCRUM_MASTER", "Scrum Master"  
+        SCRUM_MASTER = "SCRUM_MASTER", "Scrum_Master"  
         DEVELOPER = "DEVELOPER", "Developer"
         TESTER = "TESTER", "Tester"
 
