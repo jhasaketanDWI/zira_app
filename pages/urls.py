@@ -1,13 +1,12 @@
-from django.urls import path, include
-from rest_framework_nested import routers
+from django.urls import include, path
+from rest_framework.routers import DefaultRouter
 
 from .views import PageViewSet
 
-# Top-level router (optional but handy)
-router = routers.DefaultRouter()
+router = DefaultRouter()
+# top-level list/detail: /api/pages/ and /api/pages/{pk}/
 router.register(r'pages', PageViewSet, basename='page')
 
-# We'll also define a nested router in config/urls.py, similar to testCase.
 urlpatterns = [
     path('', include(router.urls)),
 ]
