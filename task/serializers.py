@@ -1,6 +1,8 @@
 from rest_framework import serializers
-from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity)
+from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity,ActivityLog)
 from project.models import ProjectMember
+from .models import FormTemplate
+
 from common.models import Comment
 from django.contrib.auth import get_user_model
 # from user.models import User
@@ -155,7 +157,7 @@ class TaskSerializer(serializers.ModelSerializer):
             'id', 'project', 'sprint', 'epic', 'title', 'description',
             'status', 'priority', 'task_type', 'status_id', 'assignees', 'reporter', 'tags',
             'start_date', 'due_date', 'story_points', 'subtasks', # Added new fields 'parent_task'
-            'created_at', 'updated_at','activity_log','comments'
+            'created_at', 'updated_at','activity_log','comments','form_data'
         ]
         read_only_fields = ['created_at', 'updated_at', 'subtasks']
 
@@ -414,14 +416,110 @@ class TaskBoardSerializer(serializers.ModelSerializer):
     def get_assignees(self, obj):
         from project.serializers import ProjectMemberSerializer  
         return ProjectMemberSerializer(obj.assignees.all(), many=True).data
-# class ActivityLogEntrySerializer(serializers.Serializer):
-#     """
-#     Validates the structure of a new entry being added to the activity history.
-#     """
-#     type = serializers.CharField(max_length=100)
-#     details = serializers.CharField()
 
-#     def validate(self, data):
-#         # You could add more complex validation here if needed
-#         return data
 
+
+
+
+# For the Form Builder
+class FormTemplateSerializer(serializers.ModelSerializer):
+    def validate_formType(self, value):
+        """
+        Normalize Frontend Types to Backend TaskTypes.
+        Frontend: 'Task', 'Story', 'Bug', 'Epic'
+        Backend: 'FEATURE', 'BUG', 'IMPROVEMENT', 'TEST_CASE'
+        """
+        value_map = {
+            'Task': 'FEATURE',
+            'Story': 'FEATURE', # Mapping Story to Feature for now
+            'Bug': 'BUG',
+            'Epic': 'EPIC_TODO' # See note below
+        }
+        
+        # Return the mapped value, or default to FEATURE if unknown
+        return value_map.get(value, 'FEATURE')
+    # Map frontend keys to backend keys
+    formType = serializers.CharField(source='task_type',required=False)
+    fields = serializers.JSONField(source='structure',required=False)
+    lastEdited = serializers.SerializerMethodField()
+    type = serializers.SerializerMethodField()
+    projectId = serializers.ReadOnlyField(source='project.id')
+
+
+    class Meta:
+        model = FormTemplate
+        fields = [
+            'id', 'projectId', 'title', 'description', 
+            'formType', 'fields', 'lastEdited', 'type',
+            'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'projectId']
+
+    def get_lastEdited(self, obj):
+        return obj.updated_at.strftime("%Y-%m-%d %H:%M")
+
+    def get_type(self, obj):
+        return 'template' if obj.is_system_template else 'custom'
+
+    def create(self, validated_data):
+        # Handle context from ViewSet
+        project_id = self.context['view'].kwargs.get('project_pk')
+        if not project_id:
+             project_id = self.context['request'].data.get('projectId')
+             
+        validated_data['project_id'] = project_id
+        validated_data['created_by'] = self.context['request'].user
+        validated_data['updated_by'] = self.context['request'].user
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        validated_data['updated_by'] = self.context['request'].user
+        return super().update(instance, validated_data)
+
+# For Creating Tasks via Forms
+class FormSubmissionSerializer(serializers.Serializer):
+    """
+    Accepts the answers from the form and creates a real Task in the backlog.
+    """
+    title = serializers.CharField()
+    description = serializers.CharField(required=False, allow_blank=True)
+    answers = serializers.JSONField(required=False)
+
+    def create(self, validated_data):
+        form_template = self.context['form_template']
+        user = self.context['request'].user
+        project = form_template.project
+
+        # 1. Get default status (e.g., 'To Do') so it appears in Backlog
+        # Assuming the first status is 'To Do' or you have a specific one
+        default_status = Status.objects.filter(title__iexact='To Do').first()
+        if not default_status:
+            default_status = Status.objects.first()
+
+        # 2. Extract Data
+        raw_answers = validated_data.get('answers', {})
+        base_desc = validated_data.get('description', '')
+
+        # 3. Create the Task
+        task = Task.objects.create(
+            project=project,
+            title=validated_data['title'],
+            description=base_desc,
+            task_type=form_template.task_type.upper(),
+            status=default_status,
+            sprint=None, # sprint=None ensures it goes to BACKLOG
+            form_data=raw_answers, # Save dynamic answers here
+            priority='MEDIUM',
+            reporter=user.projectmember_set.filter(project=project).first()
+        )
+        
+        # 4. Log Activity
+        ActivityLog.objects.create(
+            project=project,
+            task=task,
+            user=user,
+            action_type='CREATE',
+            details={'title': task.title, 'via': 'Form Submission'}
+        )
+        
+        return task

@@ -109,6 +109,9 @@ class Task(AuditBaseModel):
 
     tags = models.ManyToManyField('Tag', through='TaskTag', related_name='tasks', blank=True)
 
+    # ✨ NEW FIELD: Stores the specific form answers (e.g. {"browser": "Chrome", "steps": "..."})
+    form_data = models.JSONField(default=dict, blank=True, help_text="Dynamic data from custom forms")
+
 
     def __str__(self):
         return f"[{self.project.name}] {self.title}"
@@ -174,7 +177,27 @@ class Ticket(AuditBaseModel):
     def __str__(self):
         return f"{self.title} ({self.status})"
 
+# ✨ NEW MODEL: Stores the design of the form from your React Editor
+class FormTemplate(AuditBaseModel):
+    
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='forms')
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    
+    # Maps to TaskType (BUG, FEATURE, etc.)
+    task_type = models.CharField(max_length=50, default='FEATURE') 
+    
+    # Stores the "fields" array from your React frontend
+    structure = models.JSONField(default=list, help_text="Form fields schema")
+    
+    # Matches frontend 'type': 'template' vs 'custom'
+    is_system_template = models.BooleanField(default=False) 
+    
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='created_forms')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='updated_forms')
 
+    def __str__(self):
+        return f"{self.title} ({self.project.name})"
 
 class ActivityLog(AuditBaseModel):
     ACTION_TYPES = [

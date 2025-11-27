@@ -17,7 +17,8 @@ from common.models import Comment
 from django.contrib.contenttypes.models import ContentType
 from rest_framework.exceptions import PermissionDenied
 from user.models import User
-
+from .models import FormTemplate
+from .serializers import FormTemplateSerializer, FormSubmissionSerializer
 
 
 
@@ -655,3 +656,52 @@ class CommentViewSet(viewsets.ModelViewSet):
 
         # Save the comment, linking it to the ProjectMember and the task.
         serializer.save(author=project_member_author, content_object=task)
+
+
+
+
+
+#  NEW VIEWSET
+class FormTemplateViewSet(viewsets.ModelViewSet):
+    """
+    Endpoints for:
+    1. Listing forms (GET /api/projects/{id}/forms/)
+    2. Creating forms (POST /api/projects/{id}/forms/)
+    3. Updating forms (PUT /api/projects/{id}/forms/{form_id}/)
+    4. Deleting forms (DELETE /api/projects/{id}/forms/{form_id}/)
+    5. Submitting forms (POST /api/projects/{id}/forms/{form_id}/submit/)
+    """
+    serializer_class = FormTemplateSerializer
+    permission_classes = [IsAuthenticated, IsProjectMember]
+
+    def get_queryset(self):
+        # Filter by project from URL
+        if 'project_pk' in self.kwargs:
+            return FormTemplate.objects.filter(project_id=self.kwargs['project_pk']).order_by('-updated_at')
+        return FormTemplate.objects.none()
+
+    def perform_destroy(self, instance):
+        check_project_permission(self.request.user, instance.project)
+        instance.delete()
+
+    @action(detail=True, methods=['post'], url_path='submit')
+    def submit_form(self, request, project_pk=None, pk=None):
+        """
+        Creates a Task from this form.
+        """
+        form_template = self.get_object()
+        
+        serializer = FormSubmissionSerializer(
+            data=request.data, 
+            context={'request': request, 'form_template': form_template}
+        )
+        
+        if serializer.is_valid():
+            task = serializer.save()
+            return Response({
+                "message": "Task created successfully.",
+                "taskId": task.id,
+                "taskTitle": task.title
+            }, status=status.HTTP_201_CREATED)
+            
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

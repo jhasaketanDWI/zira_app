@@ -10,6 +10,7 @@ from .views import(
         TagViewSet,
         ActivityViewSet,
         CommentViewSet,  
+        FormTemplateViewSet,
     )
 
 router = routers.DefaultRouter()
@@ -20,6 +21,9 @@ router.register(r'statuses', StatusViewSet, basename='status')
 router.register(r'tasks', TaskViewSet, basename='task')
 router.register(r'tickets', TicketViewSet, basename='ticket')
 router.register(r'tags', TagViewSet, basename='tag')
+
+#  Register Forms globally (Optional, but good for direct ID access if needed later)
+router.register(r'forms', FormTemplateViewSet, basename='form-template')
 
 
 # This creates routes like /tasks/{task_pk}/activities/
@@ -33,38 +37,24 @@ urlpatterns = [
 ]
 
 
-
-
-# # task/urls.py
-
-# from rest_framework_nested import routers
-# from .views import EpicViewSet, SprintViewSet, StatusViewSet, TaskViewSet, TagViewSet, TicketViewSet
-
-# # router global resources not tied to a specific project
-# router = routers.DefaultRouter()
-# router.register(r'statuses', StatusViewSet, basename='status')
-
-# # This function will be called from your project's main urls.py
-# def get_project_nested_routers(project_router):
-#     """
-#     Registers task-related routes that are nested under a project.
-#     Generates URLs like:
-#     - /projects/{project_pk}/tasks/
-#     - /projects/{project_pk}/sprints/
-#     - /projects/{project_pk}/sprints/{sprint_pk}/tickets/
-#     """
+# ✨ 3. ADD THIS FUNCTION for Project-Level Nesting
+# You must call this from your MAIN urls.py to generate: /api/projects/{pk}/forms/
+def get_project_nested_routers(project_router):
+    """
+    Registers task-related routes that are nested under a project.
+    """
+    project_router.register(r'epics', EpicViewSet, basename='project-epics')
+    project_router.register(r'tags', TagViewSet, basename='project-tags')
+    project_router.register(r'tasks', TaskViewSet, basename='project-tasks')
     
-#     project_router.register(r'epics', EpicViewSet, basename='project-epics')
-#     project_router.register(r'tags', TagViewSet, basename='project-tags')
-#     project_router.register(r'tasks', TaskViewSet, basename='project-tasks')
+    # This enables: GET /api/projects/{pk}/forms/
+    project_router.register(r'forms', FormTemplateViewSet, basename='project-forms') 
     
-#     # Create a router for sprints nested under a project
-#     sprints_router = routers.NestedSimpleRouter(project_router, r'sprints', lookup='sprint')
-#     # Nest tickets under the sprints router
-#     sprints_router.register(r'tickets', TicketViewSet, basename='sprint-tickets')
+    project_router.register(r'sprints', SprintViewSet, basename='project-sprints')
     
-#     # Register the main sprints endpoint under the project
-#     project_router.register(r'sprints', SprintViewSet, basename='project-sprints')
+    sprints_router = routers.NestedSimpleRouter(project_router, r'sprints', lookup='sprint')
+    sprints_router.register(r'tickets', TicketViewSet, basename='sprint-tickets')
+    
 
-#     # Return both routers so they can be included in the main URL patterns
-#     return project_router, sprints_router
+    return project_router, sprints_router
+
