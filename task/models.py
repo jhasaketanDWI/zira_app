@@ -177,16 +177,25 @@ class Ticket(AuditBaseModel):
     def __str__(self):
         return f"{self.title} ({self.status})"
 
-# ✨ NEW MODEL: Stores the design of the form from your React Editor
+# NEW MODEL: Stores the design of the form from your React Editor
 class FormTemplate(AuditBaseModel):
+    class FormType(models.TextChoices):
+        BUG = 'BUG', 'Bug'
+        FEATURE = 'FEATURE', 'Feature'
+        IMPROVEMENT = 'IMPROVEMENT', 'Improvement'
+        
+
     
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='forms')
     title = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
+    task_type = models.CharField(max_length=20, choices=FormType.choices, default=FormType.FEATURE)
     
-    # Maps to TaskType (BUG, FEATURE, etc.)
-    task_type = models.CharField(max_length=50, default='FEATURE') 
-    
+    assignees = models.ManyToManyField(
+        'project.ProjectMember', 
+        related_name='form_templates_assigned',  
+        blank=True
+    )
     # Stores the "fields" array from your React frontend
     structure = models.JSONField(default=list, help_text="Form fields schema")
     

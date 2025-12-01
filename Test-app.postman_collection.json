@@ -701,13 +701,13 @@
 										"method": "GET",
 										"header": [],
 										"url": {
-											"raw": "{{baseUrl}}/projects/1/available-members/manager/",
+											"raw": "{{baseUrl}}/projects/{{project_id}}/available-members/manager/",
 											"host": [
 												"{{baseUrl}}"
 											],
 											"path": [
 												"projects",
-												"1",
+												"{{project_id}}",
 												"available-members",
 												"manager",
 												""
@@ -723,7 +723,7 @@
 										"header": [],
 										"body": {
 											"mode": "raw",
-											"raw": "{\r\n    \"user_id\":8 ,\r\n    \"role\": \"PROJECT_MANAGER\"\r\n}",
+											"raw": "{\r\n    \"user_id\":4 ,\r\n    \"role\": \"MANAGER\"\r\n}",
 											"options": {
 												"raw": {
 													"language": "json"
@@ -834,13 +834,13 @@
 										"method": "GET",
 										"header": [],
 										"url": {
-											"raw": "{{baseUrl}}/projects/1/available-members/developer/",
+											"raw": "{{baseUrl}}/projects/{{project_id}}/available-members/developer/",
 											"host": [
 												"{{baseUrl}}"
 											],
 											"path": [
 												"projects",
-												"1",
+												"{{project_id}}",
 												"available-members",
 												"developer",
 												""
@@ -856,7 +856,7 @@
 										"header": [],
 										"body": {
 											"mode": "raw",
-											"raw": "{\r\n    \"user_ids\": [9]\r\n}",
+											"raw": "{\r\n    \"user_ids\": [7]\r\n}",
 											"options": {
 												"raw": {
 													"language": "json"
@@ -864,13 +864,13 @@
 											}
 										},
 										"url": {
-											"raw": "{{baseUrl}}/projects/1/members/bulk-assign/developer/",
+											"raw": "{{baseUrl}}/projects/{{project_id}}/members/bulk-assign/developer/",
 											"host": [
 												"{{baseUrl}}"
 											],
 											"path": [
 												"projects",
-												"1",
+												"{{project_id}}",
 												"members",
 												"bulk-assign",
 												"developer",
@@ -2252,13 +2252,13 @@
 								"method": "GET",
 								"header": [],
 								"url": {
-									"raw": "{{baseUrl}}/tasks/1/",
+									"raw": "{{baseUrl}}/tasks/{{task_id}}/",
 									"host": [
 										"{{baseUrl}}"
 									],
 									"path": [
 										"tasks",
-										"1",
+										"{{task_id}}",
 										""
 									]
 								}
@@ -2532,177 +2532,6 @@
 								"header": [],
 								"url": {
 									"raw": ""
-								}
-							},
-							"response": []
-						}
-					]
-				},
-				{
-					"name": "Forms",
-					"item": [
-						{
-							"name": "submit Form",
-							"request": {
-								"method": "POST",
-								"header": [],
-								"body": {
-									"mode": "raw",
-									"raw": "{\r\n  \"title\": \"Bug in Login Page\",\r\n  \"description\": \"I cannot login with google.\",\r\n  \"fields\": [\r\n    {\r\n      \"id\": \"field-1\",\r\n      \"type\": \"short-text\",\r\n      \"title\": \"Summary\",\r\n      \"label\": \"Issue Summary\",\r\n      \"placeholder\": \"Briefly describe the bug...\",\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-2\",\r\n      \"type\": \"radio\",\r\n      \"title\": \"Priority\",\r\n      \"label\": \"Severity Level\",\r\n      \"options\": [\"Low\", \"Medium\", \"High\", \"Critical\"],\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-3\",\r\n      \"type\": \"long-text\",\r\n      \"title\": \"Description\",\r\n      \"label\": \"Steps to Reproduce\",\r\n      \"placeholder1\": \"1. Go to settings...\\n2. Click save...\",\r\n      \"required\": false\r\n    }\r\n  ]\r\n}",
-									"options": {
-										"raw": {
-											"language": "json"
-										}
-									}
-								},
-								"url": {
-									"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/submit/",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"projects",
-										"{{project_id}}",
-										"forms",
-										"{{form_id}}",
-										"submit",
-										""
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "create form",
-							"request": {
-								"method": "POST",
-								"header": [],
-								"body": {
-									"mode": "raw",
-									"raw": "{\r\n  \"title\": \"Bug in Login Page\",\r\n  \"description\": \"I cannot login with google.\",\r\n  \"fields\": [\r\n    {\r\n      \"id\": \"field-1\",\r\n      \"type\": \"short-text\",\r\n      \"title\": \"Summary\",\r\n      \"label\": \"Issue Summary\",\r\n      \"placeholder\": \"Briefly describe the bug...\",\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-2\",\r\n      \"type\": \"radio\",\r\n      \"title\": \"Priority\",\r\n      \"label\": \"Severity Level\",\r\n      \"options\": [\"Low\", \"Medium\", \"High\", \"Critical\"],\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-3\",\r\n      \"type\": \"long-text\",\r\n      \"title\": \"Description\",\r\n      \"label\": \"Steps to Reproduce\",\r\n      \"placeholder1\": \"1. Go to settings...\\n2. Click save...\",\r\n      \"required\": false\r\n    }\r\n  ]\r\n}",
-									"options": {
-										"raw": {
-											"language": "json"
-										}
-									}
-								},
-								"url": {
-									"raw": "{{baseUrl}}/projects/{{project_id}}/forms/",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"projects",
-										"{{project_id}}",
-										"forms",
-										""
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "get a form",
-							"request": {
-								"method": "GET",
-								"header": [],
-								"url": {
-									"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"projects",
-										"{{project_id}}",
-										"forms",
-										"{{form_id}}",
-										""
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "update form",
-							"request": {
-								"method": "PUT",
-								"header": [],
-								"body": {
-									"mode": "raw",
-									"raw": "{\r\n    \r\n    \"projectId\": 3,\r\n    \"title\": \"Bug in Login Page\",\r\n    \"description\": \"I cannot login with google.\",\r\n    \"formType\": \"FEATURE\",\r\n    \"fields\": [[\"name\",\"df\"]],\r\n    \"lastEdited\": \"2025-11-27 14:30\",\r\n    \"type\": \"custom\",\r\n    \"created_at\": \"2025-11-27T14:30:12.166166Z\",\r\n    \"updated_at\": \"2025-11-27T14:30:12.166225Z\"\r\n}",
-									"options": {
-										"raw": {
-											"language": "json"
-										}
-									}
-								},
-								"url": {
-									"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"projects",
-										"{{project_id}}",
-										"forms",
-										"{{form_id}}",
-										""
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "delete  form",
-							"request": {
-								"method": "DELETE",
-								"header": [],
-								"body": {
-									"mode": "raw",
-									"raw": "{\r\n    \r\n    \"projectId\": 3,\r\n    \"title\": \"Bug in Login Page\",\r\n    \"description\": \"I cannot login with google.\",\r\n    \"formType\": \"FEATURE\",\r\n    \"fields\": [[\"name\",\"df\"]],\r\n    \"lastEdited\": \"2025-11-27 14:30\",\r\n    \"type\": \"custom\",\r\n    \"created_at\": \"2025-11-27T14:30:12.166166Z\",\r\n    \"updated_at\": \"2025-11-27T14:30:12.166225Z\"\r\n}"
-								},
-								"url": {
-									"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"projects",
-										"{{project_id}}",
-										"forms",
-										"{{form_id}}",
-										""
-									]
-								}
-							},
-							"response": []
-						},
-						{
-							"name": "update a submitted form",
-							"request": {
-								"method": "PATCH",
-								"header": [],
-								"body": {
-									"mode": "raw",
-									"raw": "{\r\n  \"form_data\": {\r\n    \"browser\": \"Firefox\",\r\n    \"OS\": \"Windows\",\r\n      \"fields\": [\r\n    {\r\n      \"id\": \"field-1\",\r\n      \"type\": \"short-text\",\r\n      \"title\": \"Summary\",\r\n      \"label\": \"Issue Summary\",\r\n      \"placeholder\": \"Briefly describe the bug...\",\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-2\",\r\n      \"type\": \"radio\",\r\n      \"title\": \"Priority\",\r\n      \"label\": \"Severity Level\",\r\n      \"options\": [\"Low\", \"Medium\", \"High\", \"Critical\"],\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-3\",\r\n      \"type\": \"long-text\",\r\n      \"title\": \"Description\",\r\n      \"label\": \"Steps to Reproduce\",\r\n      \"placeholder1\": \"1. Go to settings...\\n2. Click save...\",\r\n      \"required\": false\r\n    }\r\n  ]\r\n  }\r\n}",
-									"options": {
-										"raw": {
-											"language": "json"
-										}
-									}
-								},
-								"url": {
-									"raw": "{{baseUrl}}/projects/{{project_id}}/tasks/{{task_id}}/",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"projects",
-										"{{project_id}}",
-										"tasks",
-										"{{task_id}}",
-										""
-									]
 								}
 							},
 							"response": []
@@ -3665,6 +3494,534 @@
 					"response": []
 				}
 			]
+		},
+		{
+			"name": "Pages",
+			"item": [
+				{
+					"name": "1. List pages in project Copy",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "2. Create root page in project Copy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Project Overview\",\n  \"content\": \"# Project Overview\\nThis is the overview page.\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "3. Create child page Copy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Backend Architecture\",\n  \"content\": \"## Backend Architecture\\nDetails here...\",\n  \"parent_id\": {{page_id}}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "4. Get single page Copy",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/{{page_id}}/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								"{{page_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "5. Update page title & content (new version) Copy",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"title\": \"Project Overview (updated)\",\n  \"content\": \"# Project Overview (updated)\\nSome updated details...\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/{{page_id}}/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								"{{page_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "6. List page versions Copy",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/{{page_id}}/versions/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								"{{page_id}}",
+								"versions",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "7. Restore page version Copy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"version\": {{version}}\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/{{page_id}}/restore/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								"{{page_id}}",
+								"restore",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "8. Delete page Copy",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/projects/{{project_id}}/pages/{{page_id}}/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"projects",
+								"{{project_id}}",
+								"pages",
+								"{{page_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "9. Upload attachment to page Copy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/path/to/your/image.png"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{base_url}}/api/pages/{{page_id}}/attachments/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"pages",
+								"{{page_id}}",
+								"attachments",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "10. Link task to page Copy",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{auth_token}}",
+								"type": "text"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"task\": {{task_id}},\n  \"note\": \"Linking this task to the docs page\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/pages/{{page_id}}/link-task/",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"api",
+								"pages",
+								"{{page_id}}",
+								"link-task",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Forms",
+			"item": [
+				{
+					"name": "submit Form",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"title\": \"Bug in Login Page\",\r\n  \"description\": \"I cannot login with google.\",\r\n  \"fields\": [\r\n    {\r\n      \"id\": \"field-1\",\r\n      \"type\": \"short-text\",\r\n      \"title\": \"Summary\",\r\n      \"label\": \"Issue Summary\",\r\n      \"placeholder\": \"Briefly describe the bug...\",\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-2\",\r\n      \"type\": \"radio\",\r\n      \"title\": \"Priority\",\r\n      \"label\": \"Severity Level\",\r\n      \"options\": [\"Low\", \"Medium\", \"High\", \"Critical\"],\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-3\",\r\n      \"type\": \"long-text\",\r\n      \"title\": \"Description\",\r\n      \"label\": \"Steps to Reproduce\",\r\n      \"placeholder1\": \"1. Go to settings...\\n2. Click save...\",\r\n      \"required\": false\r\n    }\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/submit/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"forms",
+								"{{form_id}}",
+								"submit",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "create form",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"title\": \"Bug n Login\",\r\n  \"description\": \"I cannot login with google.\",\r\n  \"formType\": \"feature\",\r\n  \"assignees\": [8],\r\n  \"fields\": [\r\n    {\r\n    \"Goal\": \"Issue Summary\",\r\n    \"text\":\"this is form field\"\r\n    },{\r\n\r\n    }\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/forms/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"forms",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get a form",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"forms",
+								"{{form_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "update form label and content",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \r\n    \"projectId\": 3,\r\n    \"title\": \"Bug in Login Page\",\r\n    \"description\": \"I cannot login with google.\",\r\n    \"formType\": \"FEATURE\",\r\n    \"fields\": [\r\n         {\r\n    \"lable\": \"Issue Summary-1\",\r\n    \"content\":\"this is form field scznbdsn\"\r\n    },\r\n    {\r\n        \"label\":\"\"\r\n    }],\r\n    \"lastEdited\": \"2025-11-27 14:30\",\r\n    \"type\": \"custom\",\r\n    \"created_at\": \"2025-11-27T14:30:12.166166Z\",\r\n    \"updated_at\": \"2025-11-27T14:30:12.166225Z\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"forms",
+								"{{form_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "delete  form",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n    \r\n    \"projectId\": 3,\r\n    \"title\": \"Bug in Login Page\",\r\n    \"description\": \"I cannot login with google.\",\r\n    \"formType\": \"FEATURE\",\r\n    \"fields\": [[\"name\",\"df\"]],\r\n    \"lastEdited\": \"2025-11-27 14:30\",\r\n    \"type\": \"custom\",\r\n    \"created_at\": \"2025-11-27T14:30:12.166166Z\",\r\n    \"updated_at\": \"2025-11-27T14:30:12.166225Z\"\r\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/forms/{{form_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"forms",
+								"{{form_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "update a submitted form",
+					"request": {
+						"method": "PATCH",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"form_data\": {\r\n    \"browser\": \"Firefox\",\r\n    \"OS\": \"Windows\",\r\n      \"fields\": [\r\n    {\r\n      \"id\": \"field-1\",\r\n      \"type\": \"short-text\",\r\n      \"title\": \"Summary\",\r\n      \"label\": \"Issue Summary\",\r\n      \"placeholder\": \"Briefly describe the bug...\",\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-2\",\r\n      \"type\": \"radio\",\r\n      \"title\": \"Priority\",\r\n      \"label\": \"Severity Level\",\r\n      \"options\": [\"Low\", \"Medium\", \"High\", \"Critical\"],\r\n      \"required\": true\r\n    },\r\n    {\r\n      \"id\": \"field-3\",\r\n      \"type\": \"long-text\",\r\n      \"title\": \"Description\",\r\n      \"label\": \"Steps to Reproduce\",\r\n      \"placeholder1\": \"1. Go to settings...\\n2. Click save...\",\r\n      \"required\": false\r\n    }\r\n  ]\r\n  }\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/tasks/{{task_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"tasks",
+								"{{task_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get all forms",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/projects/{{project_id}}/forms/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"projects",
+								"{{project_id}}",
+								"forms",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"auth": {
@@ -3734,6 +4091,11 @@
 		},
 		{
 			"key": "project_id",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "task_id",
 			"value": "",
 			"type": "default"
 		}

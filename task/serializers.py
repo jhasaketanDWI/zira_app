@@ -420,41 +420,67 @@ class TaskBoardSerializer(serializers.ModelSerializer):
 
 
 
-
 # For the Form Builder
 class FormTemplateSerializer(serializers.ModelSerializer):
     def validate_formType(self, value):
         """
         Normalize Frontend Types to Backend TaskTypes.
-        Frontend: 'Task', 'Story', 'Bug', 'Epic'
-        Backend: 'FEATURE', 'BUG', 'IMPROVEMENT', 'TEST_CASE'
+        Robust against casing (e.g., handles 'bug', 'Bug', 'BUG').
         """
+        if not value:
+            return 'FEATURE'
+
+        normalized_value = str(value).lower()
+
         value_map = {
-            'Task': 'FEATURE',
-            'Story': 'FEATURE', # Mapping Story to Feature for now
-            'Bug': 'BUG',
-            'Epic': 'EPIC_TODO' # See note below
+            'feature': 'FEATURE',
+            'story': 'FEATURE',
+            'task': 'FEATURE',
+            'bug': 'BUG',
+            'improvement': 'IMPROVEMENT',
+            'epic': 'FEATURE'
         }
-        
-        # Return the mapped value, or default to FEATURE if unknown
-        return value_map.get(value, 'FEATURE')
-    # Map frontend keys to backend keys
-    formType = serializers.CharField(source='task_type',required=False)
-    fields = serializers.JSONField(source='structure',required=False)
+        return value_map.get(normalized_value, 'FEATURE')
+    
+    formType = serializers.CharField(source='task_type', required=False)
+    fields = serializers.JSONField(source='structure', required=False)
     lastEdited = serializers.SerializerMethodField()
     type = serializers.SerializerMethodField()
     projectId = serializers.ReadOnlyField(source='project.id')
-
+    
+    # 1. Allow saving Default Assignees
+    assignees = serializers.PrimaryKeyRelatedField(
+        queryset=ProjectMember.objects.all(), 
+        many=True, 
+        required=False
+    )
 
     class Meta:
         model = FormTemplate
         fields = [
             'id', 'projectId', 'title', 'description', 
-            'formType', 'fields', 'lastEdited', 'type',
+            'formType', 'fields', 'assignees', 'lastEdited', 'type',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at', 'projectId']
 
+    def validate(self, data):
+        """
+        Ensure the default assignees belong to the same project as the form.
+        """
+        project_pk = self.context['view'].kwargs.get('project_pk')
+        if not project_pk:
+            project_pk = data.get('project_id') or self.instance.project.id
+
+        assignees = data.get('assignees', [])
+        
+        for member in assignees:
+            if str(member.project.id) != str(project_pk):
+                raise serializers.ValidationError({
+                    "assignees": f"Member {member.user.get_full_name()} does not belong to this project."
+                })
+        return data
+    
     def get_lastEdited(self, obj):
         return obj.updated_at.strftime("%Y-%m-%d %H:%M")
 
@@ -462,7 +488,6 @@ class FormTemplateSerializer(serializers.ModelSerializer):
         return 'template' if obj.is_system_template else 'custom'
 
     def create(self, validated_data):
-        # Handle context from ViewSet
         project_id = self.context['view'].kwargs.get('project_pk')
         if not project_id:
              project_id = self.context['request'].data.get('projectId')
@@ -470,11 +495,33 @@ class FormTemplateSerializer(serializers.ModelSerializer):
         validated_data['project_id'] = project_id
         validated_data['created_by'] = self.context['request'].user
         validated_data['updated_by'] = self.context['request'].user
+        
+        # Save M2M (assignees) manually if needed, but ModelSerializer.create usually handles it 
+        # unless you overrode it poorly. super().create() handles M2M if they are in validated_data.
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
         validated_data['updated_by'] = self.context['request'].user
         return super().update(instance, validated_data)
+    def to_representation(self, instance):
+        """
+        Convert IDs to Objects when sending data to Frontend.
+        """
+        response = super().to_representation(instance)
+        
+        # Customize the 'assignees' field
+        response['assignees'] = [
+            {
+                "id": member.id,
+                "name": member.user.get_full_name() or member.user.username,
+                "email": member.user.email,
+                "role": member.role
+            } 
+            for member in instance.assignees.all()
+        ]
+        
+        return response
+
 
 # For Creating Tasks via Forms
 class FormSubmissionSerializer(serializers.Serializer):
@@ -484,36 +531,70 @@ class FormSubmissionSerializer(serializers.Serializer):
     title = serializers.CharField()
     description = serializers.CharField(required=False, allow_blank=True)
     answers = serializers.JSONField(required=False)
+    assignees = serializers.PrimaryKeyRelatedField(
+        queryset=ProjectMember.objects.all(), 
+        many=True, 
+        required=False
+    )
 
+    def validate(self, data):
+        """
+        Validate that selected assignees belong to the current project.
+        """
+        form_template = self.context['form_template']
+        project = form_template.project
+        assignees = data.get('assignees', [])
+
+        if assignees:
+            for member in assignees:
+                if member.project != project:
+                    raise serializers.ValidationError({
+                        "assignees": f"Assignee '{member.user.get_full_name()}' does not belong to project '{project.name}'."
+                    })
+        return data
+    
     def create(self, validated_data):
         form_template = self.context['form_template']
         user = self.context['request'].user
         project = form_template.project
 
-        # 1. Get default status (e.g., 'To Do') so it appears in Backlog
-        # Assuming the first status is 'To Do' or you have a specific one
+        # 1. Calculate Assignees
+        final_assignees = validated_data.pop('assignees', [])
+        if not final_assignees:
+            final_assignees = list(form_template.assignees.all())
+
+        # 2. Get Default Status 
+        # --- FIX: Removed 'project=project' because Status model doesn't have it ---
         default_status = Status.objects.filter(title__iexact='To Do').first()
+        
+        # Fallback: If 'To Do' doesn't exist, just grab the first available status
         if not default_status:
             default_status = Status.objects.first()
 
-        # 2. Extract Data
+        # 3. Extract Data
         raw_answers = validated_data.get('answers', {})
         base_desc = validated_data.get('description', '')
 
-        # 3. Create the Task
+        reporter_member = ProjectMember.objects.filter(user=user, project=project).first()
+
+        # 4. Create the Task
         task = Task.objects.create(
             project=project,
             title=validated_data['title'],
             description=base_desc,
             task_type=form_template.task_type.upper(),
             status=default_status,
-            sprint=None, # sprint=None ensures it goes to BACKLOG
-            form_data=raw_answers, # Save dynamic answers here
+            sprint=None, 
+            form_data=raw_answers, 
             priority='MEDIUM',
-            reporter=user.projectmember_set.filter(project=project).first()
+            reporter=reporter_member
         )
+
+        # 5. Set Assignees
+        if final_assignees:
+            task.assignees.set(final_assignees)
         
-        # 4. Log Activity
+        # 6. Log Activity (Create)
         ActivityLog.objects.create(
             project=project,
             task=task,
@@ -521,5 +602,16 @@ class FormSubmissionSerializer(serializers.Serializer):
             action_type='CREATE',
             details={'title': task.title, 'via': 'Form Submission'}
         )
+
+        # 7. Log Activity (Assign)
+        if final_assignees:
+            assigned_names = [m.user.get_full_name() for m in final_assignees]
+            ActivityLog.objects.create(
+                project=project,
+                task=task,
+                user=user,
+                action_type='UPDATE',
+                details={'assigned_to': assigned_names}
+            )
         
         return task
