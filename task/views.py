@@ -686,9 +686,6 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='submit')
     def submit_form(self, request, project_pk=None, pk=None):
-        """
-        Creates a Task from this form.
-        """
         form_template = self.get_object()
         
         serializer = FormSubmissionSerializer(
@@ -698,10 +695,21 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
         
         if serializer.is_valid():
             task = serializer.save()
+            
+            # --- GET ASSIGNEE NAMES FOR RESPONSE ---
+            assigned_people = [
+                {
+                    "id": m.id, 
+                    "name": m.user.get_full_name() or m.user.username
+                } 
+                for m in task.assignees.all()
+            ]
+            
             return Response({
                 "message": "Task created successfully.",
                 "taskId": task.id,
-                "taskTitle": task.title
+                "taskTitle": task.title,
+                "assignedTo": assigned_people  # <--- Now returns a list of names/objects
             }, status=status.HTTP_201_CREATED)
             
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
