@@ -164,6 +164,70 @@ class PageViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=["post"], url_path="delete-version")
+    def delete_version(self, request, pk=None, project_pk=None):
+        """
+        Delete a specific version of this page.
+
+        Body: { "version": <int> }
+
+        Rules:
+        - Cannot delete the only remaining version.
+        - If deleting the current latest_version, update latest_version and title
+          to the next latest remaining version.
+        """
+        page = self.get_object()
+        user = request.user
+
+        # permission: same as restore, you can tighten roles later
+        check_project_permission(user, page.project, allowed_roles=[])
+
+        version_num = request.data.get("version")
+        if version_num is None:
+            return Response(
+                {"detail": "version is required."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            version_num = int(version_num)
+        except (TypeError, ValueError):
+            return Response(
+                {"detail": "version must be an integer."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        # Ensure the version exists for this page
+        try:
+            target = page.versions.get(version=version_num)
+        except PageVersion.DoesNotExist:
+            return Response(
+                {"detail": "Version not found for this page."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+        # Prevent deleting the only remaining version
+        if page.versions.count() == 1:
+            return Response(
+                {"detail": "Cannot delete the only remaining version of a page."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        is_latest = (version_num == page.latest_version)
+
+        # Delete the target version
+        target.delete()
+
+        # If we deleted the latest version, update latest_version and title
+        if is_latest:
+            new_latest = page.versions.order_by("-version").first()
+            if new_latest:
+                page.latest_version = new_latest.version
+                page.title = new_latest.title
+                page.save(update_fields=["latest_version", "title"])
+
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
     @action(detail=True, methods=["post"], url_path="attachments", parser_classes=[MultiPartParser, FormParser])
     def upload_attachment(self, request, pk=None, project_pk=None):
         """
