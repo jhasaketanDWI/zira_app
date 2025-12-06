@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity,ActivityLog)
+from .models import (Epic,Sprint, Ticket, Status, Task, Tag, Activity,ActivityLog, Goal)
 from project.models import ProjectMember
 from .models import FormTemplate
 
@@ -231,18 +231,67 @@ class TaskSerializer(serializers.ModelSerializer):
         if assignees_data is not None:
             instance.assignees.set(assignees_data)
         return instance
+class GoalSerializer(serializers.ModelSerializer):
+    # 1. Map Target Date from Sprint End Date
+    target_date = serializers.DateField(source='sprint.end_date', read_only=True)
     
+    # 2. Get Computed Properties
+    status = serializers.ReadOnlyField(source='status_label')
+    progress = serializers.ReadOnlyField(source='progress_percentage')
+    
+    # 3. Owner Details (Modified to return ONLY email)
+    owner_details = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Goal
+        fields = [
+            'id', 
+            'project', 
+            'sprint', 
+            'title', 
+            'description', 
+            'status',          # Computed
+            'progress',        # Computed
+            'target_date',     # From Sprint
+            'owner',           # ID for writing
+            'owner_details',   # Object for reading
+            'created_at', 
+            'updated_at'
+        ]
+        read_only_fields = ['created_at', 'updated_at', 'status', 'progress', 'target_date']
+
+    def get_owner_details(self, obj):
+        """
+        Returns only the owner's email address.
+        """
+        if obj.owner and obj.owner.user:
+            return {
+                "email": obj.owner.user.email
+            }
+        return None
+
+    def get_sub_goals(self, obj):
+        # Recursively serialize children
+        if obj.sub_goals.exists():
+            return GoalSerializer(obj.sub_goals.all(), many=True, context=self.context).data
+        return []   
 class SprintSerializer(serializers.ModelSerializer):
     # serialize them using TaskSerializer, and add them to a 'tasks' list.
     
-    tasks = TaskSerializer(source='sprint_tasks', many=True, read_only=True)    
+    tasks = TaskSerializer(source='sprint_tasks', many=True, read_only=True)   
+    # goal= GoalSerializer(source='sprint_goal', read_only=True)
+    goal = serializers.CharField(required=False, allow_null=True)
+    goal_details = GoalSerializer(source='sprint_goal', read_only=True)
+    owner_name = serializers.CharField(source='owner.get_full_name', read_only=True)
+
     class Meta:
         model = Sprint
         fields = [
-            'id', 'name', 'goal', 'project', 'start_date', 'end_date',
-            'duration', 'epic', 'is_active', 'is_ended', 'tasks'
+            'id', 'name', 'goal','goal_details', 'project', 'start_date', 'end_date',
+            'duration', 'epic', 'is_active', 'is_ended', 'tasks','owner','owner_name'
         ]
-        read_only_fields = ['is_active', 'is_ended']
+    read_only_fields = ['is_active', 'is_ended', 'owner', 'owner_name']    
+    
     def validate(self, data):
         
         start_date = data.get("start_date")
@@ -252,6 +301,59 @@ class SprintSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"end_date": "End date must be after start date."})
 
         return data
+   
+
+    def create(self, validated_data):
+        """
+        When Creating: Save the Sprint, then auto-create the Goal object 
+        using the 'goal' text provided in the payload.
+        """
+        # 1. Extract the goal text string (e.g., "Complete mail features")
+        goal_text = validated_data.get('goal', '')
+        
+        # 2. Create the Sprint (this saves the text to the Sprint table too)
+        sprint = super().create(validated_data)
+
+        # 3. Create the real Goal object linked to this sprint
+        if goal_text:
+            Goal.objects.create(
+                project=sprint.project,
+                sprint=sprint,
+                title=f"Goal for {sprint.name}", # Use the text as the goal title
+                description=goal_text, # And also as description
+                owner=None # Model logic will auto-assign owner from sprint creator
+            )
+            
+        return sprint
+
+    def update(self, instance, validated_data):
+        """
+        When Updating: If 'goal' text changes, update the linked Goal object too.
+        """
+        goal_text = validated_data.get('goal')
+        
+        # 1. Update the Sprint
+        instance = super().update(instance, validated_data)
+
+        # 2. Update or Create the linked Goal object
+        if goal_text is not None:
+            # Try to get existing linked goal, or create if missing
+            goal_obj, created = Goal.objects.get_or_create(
+                sprint=instance,
+                defaults={
+                    'project': instance.project,
+                    'title': f"Goal for {instance.name}",
+                    'description': goal_text # Set description on creation
+                }
+            )
+             # Update description if it changed
+            if goal_obj.description != goal_text:
+                goal_obj.description = goal_text
+                # Optional: Ensure title stays synced with sprint name
+                goal_obj.title = f"Goal for {instance.name}" 
+                goal_obj.save()
+                
+        return instance
 
 class EpicSerializer(serializers.ModelSerializer):
     sprints = SprintSerializer(many=True, read_only=True)

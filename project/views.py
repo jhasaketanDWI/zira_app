@@ -284,7 +284,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 user_to_invite=existing_user
             )
             
-            accept_link = f"http://localhost:5173/accept-project-invite?token={invitation.token}"
+            accept_link = f"https://kanban.dreamwaveinnovations.com/accept-project-invite?token={invitation.token}"
             subject = f"You are invited to join Project: {project.name}"
             message = (
                 f"Hello {existing_user.first_name or existing_user.email},\n\n"
@@ -332,7 +332,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             
             # 5. Send the set password link
             # Point this to your ORIGINAL set-password frontend page
-            set_password_link = f"http://localhost:5173/set-password?token={invitation.token}"
+            set_password_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
             
             subject = f"You are invited to join Project: {project.name}"
             message = (

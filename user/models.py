@@ -1,6 +1,6 @@
 from django.db import models
 from django.conf import settings
-from common.models import AuditBaseModel
+from common.models import AuditBaseModel, SoftDeleteModel
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 import uuid
 from common.manager import SoftDeleteManager
@@ -49,7 +49,7 @@ class CustomUserManager(BaseUserManager,SoftDeleteManager):
             raise ValueError('Superuser must have is_superuser=True.')
         return self.create_user(email, password, **extra_fields)
 
-class User(AbstractUser, AuditBaseModel):
+class User(AbstractUser, AuditBaseModel, SoftDeleteModel):
 
     class Role(models.TextChoices):
         ADMIN = "ADMIN", "Admin"

@@ -2,7 +2,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag,ActivityLog, Status as StatusModel)
+from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag,ActivityLog, Status as StatusModel, Goal)
 from rest_framework import viewsets,status
 from common.permissions import check_project_permission
 from .permissions import HasFullTaskAccess, CanViewTask
@@ -18,7 +18,8 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework.exceptions import PermissionDenied
 from user.models import User
 from .models import FormTemplate
-from .serializers import FormTemplateSerializer, FormSubmissionSerializer
+from .serializers import FormTemplateSerializer, FormSubmissionSerializer,GoalSerializer
+
 
 
 
@@ -85,15 +86,28 @@ class SprintViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         user = self.request.user
-        # Filter sprints belonging to projects where the user is owner or member
-        return Sprint.objects.filter(
-        Q(project__owner=user) | Q(project__projectmember__user=user)
-    ).distinct()
+        
+        # 1. Base Security: Only show sprints for projects the user is a member/owner of
+        queryset = Sprint.objects.filter(
+            Q(project__owner=user) | Q(project__projectmember__user=user)
+        ).distinct().order_by("-id")
+
+        # 2. ✅ FIX: Check if called from nested URL (/projects/{pk}/sprints/)
+        # 'project_pk' comes from the nested router lookup
+        if 'project_pk' in self.kwargs:
+            queryset = queryset.filter(project_id=self.kwargs['project_pk'])
+            
+        # 3. Optional: Support query param filtering (?project_id=1)
+        project_param = self.request.query_params.get('project_id')
+        if project_param:
+            queryset = queryset.filter(project_id=project_param)
+
+        return queryset
 
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
         check_project_permission(self.request.user, project)  # Owner/PM only
-        serializer.save()
+        serializer.save(owner=self.request.user)
 
     def perform_update(self, serializer):
         project = serializer.instance.project
@@ -279,6 +293,107 @@ class TagViewSet(viewsets.ModelViewSet):
         check_project_permission(self.request.user, instance.project)
         instance.delete()
 
+
+class GoalViewSet(viewsets.ModelViewSet):
+    """
+    API endpoint for managing Goals.
+    """
+    queryset = Goal.objects.all().order_by('-id')
+    serializer_class = GoalSerializer
+    permission_classes = [IsAuthenticated, IsProjectMember]
+
+    def get_queryset(self):
+        user = self.request.user
+        
+        # 1. Base Security: Filter by projects user has access to
+        queryset = Goal.objects.filter(
+            Q(project__owner=user) | Q(project__projectmember__user=user)
+        ).distinct()
+
+        # 2. Filter by Project ID (e.g., /api/goals/?project_id=1)
+        project_id = self.request.query_params.get('project_id')
+        if project_id:
+            queryset = queryset.filter(project_id=project_id)
+
+        # 3. Filter by Sprint ID (e.g., /api/goals/?sprint_id=5)
+        sprint_id = self.request.query_params.get('sprint_id')
+        if sprint_id:
+            queryset = queryset.filter(sprint_id=sprint_id)
+
+        # 4. Filter by Parent (for root level goals)
+        # If you only want top-level goals in the main list:
+        if self.request.query_params.get('root_only') == 'true':
+            queryset = queryset.filter(parent__isnull=True)
+
+        return queryset
+    @action(detail=False, methods=['get'], url_path='my-goals')
+    def my_goals(self, request, project_pk=None):
+        """
+        API: GET /api/goals/my-goals/?project_id=1
+        Fetches ONLY goals for sprints where the logged-in user has assigned tasks.
+        """
+        # Start with the base queryset (Project Security)
+        queryset = self.get_queryset()
+        
+        # Filter: User must be an assignee on at least one task in the linked sprint
+        queryset = queryset.filter(
+            sprint__sprint_tasks__assignees__user=request.user
+        ).distinct()
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    @action(detail=False, methods=['get'], url_path='off-track')
+    def off_track_goals(self, request, project_pk=None):
+        """
+        API: GET /api/goals/off-track/?project_id=1
+        Fetches goals that are logically 'OFF_TRACK'.
+        Logic: The linked Sprint's end_date is in the past (yesterday or older).
+        """
+        queryset = self.get_queryset()
+        today = timezone.now().date()
+        
+        # Logic for OFF_TRACK: Sprint end date is strictly less than today
+        queryset = queryset.filter(sprint__end_date__lt=today)
+        
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data)
+
+    def perform_create(self, serializer):
+        project = serializer.validated_data.get("project")
+        if not project:
+            # If project is not passed explicitly, try to infer it from the sprint
+            sprint = serializer.validated_data.get("sprint")
+            if sprint:
+                project = sprint.project
+        
+        if not project:
+             raise serializers.ValidationError({"project": "Project is required."})
+
+        # Security check
+        check_project_permission(self.request.user, project, allowed_roles=[])
+        
+        # Save the goal (owner logic is handled in models.py save() method now)
+        serializer.save(project=project)
+
+    def perform_update(self, serializer):
+        project = serializer.instance.project
+        check_project_permission(self.request.user, project, allowed_roles=[])
+        serializer.save()
+        
+    def perform_destroy(self, instance):
+        check_project_permission(self.request.user, instance.project)
+        instance.delete()
 
 class TaskViewSet(viewsets.ModelViewSet):
     """

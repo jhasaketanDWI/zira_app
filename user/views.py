@@ -321,7 +321,7 @@ class InviteUserView(generics.CreateAPIView):
             is_active=False # User remains inactive until password is set
         )
 
-        invitation_link = f"http://localhost:5173/set-password?token={invitation.token}"
+        invitation_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
         send_mail(
             subject='You have been invited to join test-app!',
             message=f"Hello, Please click the link to set your password and activate your account: {invitation_link}",

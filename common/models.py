@@ -37,7 +37,7 @@ class SoftDeleteModel(models.Model):
 
     class Meta:
         abstract = True
-class AuditBaseModel(SoftDeleteModel):
+class AuditBaseModel(models.Model):
     """
     An abstract base class model that provides self-updating
     `created_at` and `updated_at` fields, and tracks the user

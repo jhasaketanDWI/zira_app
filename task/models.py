@@ -3,6 +3,8 @@ from common.models import AuditBaseModel
 from project.models import Project, ProjectMember
 from django.contrib.contenttypes.fields import GenericRelation
 from django.conf import settings
+from django.utils import timezone
+
 
 class Status(AuditBaseModel):
     """
@@ -51,6 +53,14 @@ class Sprint(AuditBaseModel):
         blank=True,
         related_name='sprints'  # Allows you to do epic.sprints.all()
     )
+
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='owned_sprints'
+    )
     is_active = models.BooleanField(default=False)
     is_ended = models.BooleanField(default=False)
 
@@ -58,6 +68,113 @@ class Sprint(AuditBaseModel):
         return f"{self.project.name} - {self.name}"
 
 
+class Goal(AuditBaseModel):
+    class StatusLabel(models.TextChoices):
+        ON_TRACK = 'ON_TRACK', 'On Track'
+        AT_RISK = 'AT_RISK', 'At Risk'
+        OFF_TRACK = 'OFF_TRACK', 'Off Track'
+
+    # Required for permission/multitenancy logic, even if "only" fields requested
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='goals')
+
+    # 1. SPRINT LINKING: One Sprint = One Goal
+    sprint = models.OneToOneField(
+        'task.Sprint', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='sprint_goal'
+    )
+
+    # 2. PARENT GOALS: For hierarchy
+    parent = models.ForeignKey(
+        'self', 
+        on_delete=models.CASCADE, 
+        null=True, 
+        blank=True, 
+        related_name='sub_goals'
+    )
+
+    # 3. DESCRIPTION & TITLE
+    # The UI images show a short name/title is needed for the list view
+    title = models.CharField(max_length=255, help_text="Short name of the goal")
+    description = models.TextField(blank=True, null=True, help_text="Detailed description")
+    
+    owner = models.ForeignKey(
+        ProjectMember, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name='owned_goals'
+    )
+
+    # 5. MANUAL OVERRIDES
+    _manual_progress = models.PositiveSmallIntegerField(default=0)
+    _manual_status = models.CharField(
+        max_length=20, 
+        choices=StatusLabel.choices, 
+        default=StatusLabel.ON_TRACK
+    )
+
+    def __str__(self):
+        return self.title
+
+    def save(self, *args, **kwargs):
+        """
+        AUTOMATION: 
+        1. Check if this goal is linked to a Sprint.
+        2. Check if that Sprint has an 'owner' (User).
+        3. Find the 'ProjectMember' profile for that User in this Project.
+        4. Assign that ProjectMember as the Goal owner.
+        """
+        if self.sprint and self.sprint.owner:
+            # Find the ProjectMember for the sprint owner
+            sprint_owner_member = ProjectMember.objects.filter(
+                user=self.sprint.owner,
+                project=self.project
+            ).first()
+            
+            # Set the goal owner to match the sprint owner
+            if sprint_owner_member:
+                self.owner = sprint_owner_member
+                
+        super().save(*args, **kwargs)
+
+    # 6. DYNAMIC STATUS & PROGRESS (The "Status" Field)
+    @property
+    def progress_percentage(self):
+        # If linked to a sprint, calculate based on time elapsed
+        if self.sprint and self.sprint.start_date and self.sprint.end_date:
+            total_duration = (self.sprint.end_date - self.sprint.start_date).days
+            if total_duration <= 0: return 0
+            
+            elapsed = (timezone.now().date() - self.sprint.start_date).days
+            
+            if elapsed < 0: return 0 
+            if elapsed > total_duration: return 100 
+            
+            return int((elapsed / total_duration) * 100)
+            
+        # Fallback to manual input for non-sprint goals
+        return self._manual_progress 
+
+    @property
+    def status_label(self):
+        # If linked to a sprint, calculate based on end date proximity
+        if self.sprint and self.sprint.end_date:
+            today = timezone.now().date()
+            days_remaining = (self.sprint.end_date - today).days
+
+            if days_remaining < 0:
+                return self.StatusLabel.OFF_TRACK
+            elif days_remaining <= 3: 
+                return self.StatusLabel.AT_RISK
+            else:
+                return self.StatusLabel.ON_TRACK
+
+        # Fallback to manual input for non-sprint goals
+        return self._manual_status
+    
 
 class Task(AuditBaseModel):
 
@@ -109,7 +226,7 @@ class Task(AuditBaseModel):
 
     tags = models.ManyToManyField('Tag', through='TaskTag', related_name='tasks', blank=True)
 
-    # ✨ NEW FIELD: Stores the specific form answers (e.g. {"browser": "Chrome", "steps": "..."})
+    #stores the specific form answers (e.g. {"browser": "Chrome", "steps": "..."})
     form_data = models.JSONField(default=dict, blank=True, help_text="Dynamic data from custom forms")
 
 
