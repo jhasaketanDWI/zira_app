@@ -11,7 +11,7 @@ from project.models import ProjectInvitation
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.core.mail import send_mail
-from common.permissions import IsOwnerUser,IsOwnerAdminOrManager, IsOwnerOrAdmin
+from common.permissions import IsOwnerUser,IsOwnerAdminOrScrumMaster, IsOwnerOrAdmin,IsOwnerAdminOrManager,IsOwnerAdminOrScrumMasterOrManager
 from django.utils.crypto import get_random_string
 from django.db.models import Q
 from .serializers import(
@@ -134,10 +134,10 @@ class AdminSignUpView(generics.CreateAPIView):
 
 
 class TeamStatsView(APIView):
-    permission_classes = [IsAuthenticated, IsOwnerAdminOrManager]
+    permission_classes = [IsAuthenticated, IsOwnerAdminOrScrumMasterOrManager]
     def get(self, request, *args, **kwargs):
         user = request.user
-        if user.role == User.Role.OWNER or user.role == User.Role.ADMIN:
+        if user.role == User.Role.OWNER or user.role == User.Role.ADMIN or user.role == User.Role.SCRUM_MASTER or user.role == User.Role.MANAGER:
             # --- Global Stats for Owner/Admin ---
             total_members = User.objects.count()
             active_members = User.objects.filter(is_active=True).count()
@@ -146,13 +146,12 @@ class TeamStatsView(APIView):
             ).count()
 
             stats = {
-                # 'scope': 'global',
                 'total_members': total_members,
                 'active_members': active_members,
                 'active_projects': active_projects
             }
             return Response(stats)
-        
+
         elif user.role == User.Role.MANAGER:
             try:
                 managed_project_ids = ProjectMember.objects.filter(
@@ -309,7 +308,7 @@ class InviteUserView(generics.CreateAPIView):
     POST /api/users/invite/
     """
     serializer_class = InvitationSerializer
-    permission_classes = [IsOwnerOrAdmin] # Only allows OWNERS
+    permission_classes = [IsOwnerAdminOrScrumMaster,IsOwnerAdminOrManager] 
 
     def perform_create(self, serializer):
         invitation = serializer.save(invited_by=self.request.user)
@@ -328,45 +327,6 @@ class InviteUserView(generics.CreateAPIView):
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[invitation.email],
         )
-        # response_data = {
-        #     'email': invitation.email,
-        #     'role': invitation.role,
-        #     'token': str(invitation.token) 
-        # }
-
-        # headers = self.get_success_headers(serializer.data)
-        # return Response(response_data, status=status.HTTP_201_CREATED, headers=headers)
-
-# class SetPasswordView(generics.GenericAPIView):
-#     """
-#     API endpoint for an invited user to set their password and activate their account.
-#     POST /api/users/set-password/
-#     """
-#     serializer_class = SetPasswordSerializer
-#     permission_classes = [AllowAny]
-
-#     def post(self, request, *args, **kwargs):
-#         serializer = self.get_serializer(data=request.data)
-#         serializer.is_valid(raise_exception=True)
-
-#         token = serializer.validated_data['token']
-#         password = serializer.validated_data['password']
-
-#         try:
-#             invitation = Invitation.objects.get(token=token, status=Invitation.Status.PENDING)
-#             user = User.objects.get(email=invitation.email)
-
-#             user.set_password(password)
-#             user.is_active = True
-#             user.save()
-
-#             invitation.status = Invitation.Status.ACCEPTED
-#             invitation.save()
-
-#             return Response({"message": "Password set successfully. You can now log in."}, status=status.HTTP_200_OK)
-
-#         except (Invitation.DoesNotExist, User.DoesNotExist):
-#             return Response({"error": "Invalid token or user not found."}, status=status.HTTP_400_BAD_REQUEST)
 
 class SetPasswordView(APIView):
     """
@@ -502,7 +462,9 @@ class UserRolesView(APIView):
         if user_role == User.Role.OWNER:
             invitable_roles = [role for role in all_roles if role[0] not in [User.Role.ADMIN, User.Role.OWNER]]
             return Response(invitable_roles)
-
+        if user_role == User.Role.SCRUM_MASTER:
+            invitable_roles = [role for role in all_roles if role[0] in [User.Role.MANAGER,User.Role.DEVELOPER, User.Role.TESTER]]
+            return Response(invitable_roles)
         if user_role == User.Role.MANAGER:
             invitable_roles = [role for role in all_roles if role[0] in [User.Role.DEVELOPER, User.Role.TESTER]]
             return Response(invitable_roles)
@@ -527,12 +489,14 @@ class FilteredUserListView(generics.ListAPIView):
         
         # Determine the roles the current user is allowed to see based on hierarchy
         if requesting_user.role == User.Role.OWNER:
-            allowed_roles = [User.Role.MANAGER, User.Role.DEVELOPER, User.Role.TESTER]
+            allowed_roles = [User.Role.MANAGER,User.Role.SCRUM_MASTER, User.Role.DEVELOPER, User.Role.TESTER]
         elif requesting_user.role == User.Role.ADMIN:
             # Assuming Admin is the highest level and can see all other roles
-            allowed_roles = [User.Role.OWNER, User.Role.MANAGER, User.Role.DEVELOPER, User.Role.TESTER]
+            allowed_roles = [User.Role.OWNER, User.Role.MANAGER,User.Role.SCRUM_MASTER, User.Role.DEVELOPER, User.Role.TESTER]
         elif requesting_user.role == User.Role.MANAGER:
             allowed_roles = [User.Role.DEVELOPER, User.Role.TESTER]
+        elif requesting_user.role == User.Role.SCRUM_MASTER:
+            allowed_roles = [User.Role.DEVELOPER, User.Role.TESTER, User.Role.MANAGER]
         else: # Developers and Testers have no subordinates to view
             allowed_roles = []
         

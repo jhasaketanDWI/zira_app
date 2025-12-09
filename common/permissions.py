@@ -13,7 +13,7 @@ def check_project_permission(user, project, allowed_roles=None):
 
     # If allowed_roles is None, use the default restrictive roles.
     if allowed_roles is None:
-        default_roles = ["OWNER", "PROJECT_MANAGER"]
+        default_roles = ["OWNER", "PROJECT_MANAGER","SCRUM_MASTER"]
         if membership.role not in default_roles:
             raise PermissionDenied("You do not have permission to perform this action.")
     elif allowed_roles == []:
@@ -82,5 +82,26 @@ class IsOwnerAdminOrScrumMaster(permissions.BasePermission):
             User.Role.OWNER,
             User.Role.ADMIN,
             User.Role.SCRUM_MASTER
+        ]
+    
+
+
+class IsOwnerAdminOrScrumMasterOrManager(permissions.BasePermission):
+    """
+    Custom permission to only allow users with the global role of
+    Owner, Admin, or Scrum Master.
+    """
+    message = "You do not have permission to create a team. Only Owners, Admins, and Scrum Masters are allowed."
+
+    def has_permission(self, request, view):
+        if not request.user or not request.user.is_authenticated:
+            return False
+
+        # Check if the user's role is one of the allowed roles [cite: models.py]
+        return request.user.role in [
+            User.Role.OWNER,
+            User.Role.ADMIN,
+            User.Role.SCRUM_MASTER,
+            User.Role.MANAGER
         ]
 

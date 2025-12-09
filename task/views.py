@@ -2,9 +2,9 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
-from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag,ActivityLog, Status as StatusModel, Goal)
+from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag,ActivityLog, Status as StatusModel, Goal,FormTemplate)
 from rest_framework import viewsets,status
-from common.permissions import check_project_permission
+from common.permissions import check_project_permission,IsOwnerOrAdmin
 from .permissions import HasFullTaskAccess, CanViewTask
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
@@ -17,7 +17,6 @@ from common.models import Comment
 from django.contrib.contenttypes.models import ContentType
 from rest_framework.exceptions import PermissionDenied
 from user.models import User
-from .models import FormTemplate
 from .serializers import FormTemplateSerializer, FormSubmissionSerializer,GoalSerializer
 
 
@@ -83,6 +82,7 @@ class EpicViewSet(viewsets.ModelViewSet):
 class SprintViewSet(viewsets.ModelViewSet):
     queryset = Sprint.objects.all().order_by("-id")
     serializer_class = SprintSerializer
+    permission_classes = [IsAuthenticated, IsProjectMember,IsOwnerOrAdmin]
 
     def get_queryset(self):
         user = self.request.user
@@ -300,20 +300,43 @@ class GoalViewSet(viewsets.ModelViewSet):
     """
     queryset = Goal.objects.all().order_by('-id')
     serializer_class = GoalSerializer
-    permission_classes = [IsAuthenticated, IsProjectMember]
+    permission_classes = [IsAuthenticated, IsProjectMember,IsOwnerOrAdmin]
+    def check_user_role(self, user, allowed_roles):
+        """
+        Determines if the user holds an allowed role for the current project.
+        MUST BE CUSTOMIZED based on your ProjectMember model/logic.
+        """
+        project_pk = self.kwargs.get('project_pk')
+        if not project_pk:
+            # If no project is specified, assume no high-level project-specific access
+            return False 
+
+        # Placeholder: Check if the user's role in the project matches the allowed_roles
+        try:
+            # You must ensure ProjectMember is correctly imported and linked
+            member = ProjectMember.objects.get(user=user, project_id=project_pk)
+            return member.role in allowed_roles
+        except:
+            # Catch all exceptions (like ProjectMember.DoesNotExist) and deny special access
+            return False
 
     def get_queryset(self):
         user = self.request.user
-        
+        project_pk = self.kwargs.get('project_pk')
+
         # 1. Base Security: Filter by projects user has access to
         queryset = Goal.objects.filter(
             Q(project__owner=user) | Q(project__projectmember__user=user)
         ).distinct()
 
         # 2. Filter by Project ID (e.g., /api/goals/?project_id=1)
-        project_id = self.request.query_params.get('project_id')
-        if project_id:
-            queryset = queryset.filter(project_id=project_id)
+        if project_pk:
+            # This is the crucial step to ensure goals are always limited 
+            # to the project specified in the URL.
+            queryset = queryset.filter(project_id=project_pk)
+
+        
+      
 
         # 3. Filter by Sprint ID (e.g., /api/goals/?sprint_id=5)
         sprint_id = self.request.query_params.get('sprint_id')
@@ -325,20 +348,28 @@ class GoalViewSet(viewsets.ModelViewSet):
         if self.request.query_params.get('root_only') == 'true':
             queryset = queryset.filter(parent__isnull=True)
 
-        return queryset
+        return queryset.order_by('-id')  # Apply default ordering
     @action(detail=False, methods=['get'], url_path='my-goals')
     def my_goals(self, request, project_pk=None):
         """
         API: GET /api/goals/my-goals/?project_id=1
         Fetches ONLY goals for sprints where the logged-in user has assigned tasks.
         """
+        user = request.user
         # Start with the base queryset (Project Security)
         queryset = self.get_queryset()
+
+        high_level_roles = ['OWNER', 'ADMIN', 'SCRUM_MASTER', 'MANAGER']
         
-        # Filter: User must be an assignee on at least one task in the linked sprint
-        queryset = queryset.filter(
-            sprint__sprint_tasks__assignees__user=request.user
-        ).distinct()
+        # # Check if the user is a high-level role in this project
+        if self.check_user_role(user, high_level_roles):
+            pass         
+        else:    
+            # Regular members see ONLY goals linked to sprints where they have tasks assigned.
+            queryset = queryset.filter(
+                sprint__sprint_tasks__assignees__user=user
+            ).distinct()
+        
         
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -416,7 +447,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             User.Role.OWNER,
             User.Role.ADMIN,
             User.Role.MANAGER,
-            User.Role.SCRUM_MASTER  # Added based on your request
+            User.Role.SCRUM_MASTER 
         ]
 
         # 3. Check the user's role
@@ -730,7 +761,7 @@ class StatusViewSet(viewsets.ModelViewSet):
     """
     queryset = StatusModel.objects.all().order_by('id')
     serializer_class = StatusSerializer
-    permission_classes = [IsAuthenticated, IsAdminUser]  # Only admin users can manage statuses for now or else we can authorized a person having Full Task Access
+    permission_classes = [IsAuthenticated, HasFullTaskAccess]  # Only admin users can manage statuses for now or else we can authorized a person having Full Task Access
 
 
 

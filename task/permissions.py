@@ -46,7 +46,7 @@ class HasFullTaskAccess(permissions.BasePermission):
     def has_permission(self, request, view):
         if not request.user or not request.user.is_authenticated:
             return False
-        return request.user.role in [User.Role.OWNER, User.Role.MANAGER]
+        return request.user.role in [User.Role.OWNER, User.Role.MANAGER,User.Role.SCRUM_MASTER]
 
 class CanViewTask(permissions.BasePermission):
     """
@@ -62,4 +62,4 @@ class CanViewTask(permissions.BasePermission):
             return True
 
         # For write methods (POST, PUT, DELETE), check for Owner or Manager role
-        return request.user.role in [User.Role.OWNER, User.Role.MANAGER]
+        return request.user.role in [User.Role.OWNER, User.Role.MANAGER,User.Role.SCRUM_MASTER]

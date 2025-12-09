@@ -17,6 +17,7 @@ from django.core.mail import send_mail
 from django.conf import settings
 from common.permissions import IsOwnerAdminOrManager
 from user.serializers import UserSerializer
+from django.db import transaction
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by("-id")
     serializer_class = ProjectSerializer
@@ -30,25 +31,73 @@ class ProjectViewSet(viewsets.ModelViewSet):
         user=self.request.user
         return Project.objects.filter(
             Q(owner=user) | Q(projectmember__user=user)
-        ).distinct()  
-     
+        ).distinct() .order_by("-id")
+    @transaction.atomic
     def perform_create(self, serializer):
         manager_to_assign = serializer.validated_data.get('MANAGER ')
 
+        # 1. Save the Project (Creator becomes the Project Owner)
         project = serializer.save(owner=self.request.user)
-        ProjectMember.objects.create(
-            user=self.request.user,
-            project=project,
-            role=ProjectMember.Role.OWNER
-        )
+        creator = self.request.user
 
-        if manager_to_assign:
-            if manager_to_assign != self.request.user:
-                ProjectMember.objects.create(
-                    user=manager_to_assign,
+        # FIX 1: Use a set of IDs for efficient lookups and exclusion
+        # Initialize with the creator's ID
+        users_to_exclude_ids = {creator.id}
+        
+        # FIX 2: Create a list of ProjectMember objects directly
+        members_to_create = []
+        
+        # Add the creator (owner) immediately
+        members_to_create.append(
+            ProjectMember(
+                user=creator,
+                project=project,
+                role=ProjectMember.Role.OWNER
+            )
+        )
+        
+        # --- NEW LOGIC: Automatically Add Organization Owner and Scrum Masters ---
+        
+        # 2. Find the Organization Owner(s)
+        # Assuming the role is 'ORG_OWNER'
+        org_owners = User.objects.filter(role='OWNER').exclude(id__in=users_to_exclude_ids)
+        for owner in org_owners:
+            members_to_create.append(
+                ProjectMember(
+                    user=owner,
                     project=project,
-                    role=ProjectMember.Role.MANAGER 
+                    role=ProjectMember.Role.OWNER # Assign the highest role for visibility
                 )
+            )
+            users_to_exclude_ids.add(owner.id) # Track ID to exclude from later queries
+
+        # 3. Find all Scrum Masters
+        scrum_masters = User.objects.filter(role='SCRUM_MASTER').exclude(id__in=users_to_exclude_ids)
+        for sm in scrum_masters:
+            # Add them with the Scrum Master role
+            members_to_create.append(
+                ProjectMember(
+                    user=sm,
+                    project=project,
+                    role=ProjectMember.Role.SCRUM_MASTER
+                )
+            )
+            users_to_exclude_ids.add(sm.id)
+            
+        # 4. Handle Manager assignment (if provided in the request)
+        if manager_to_assign and manager_to_assign != creator:
+            # Check if manager is already added as Owner/SCM
+            if manager_to_assign.id not in users_to_exclude_ids:
+                members_to_create.append(
+                    ProjectMember(
+                        user=manager_to_assign,
+                        project=project,
+                        role=ProjectMember.Role.MANAGER
+                    )
+                )
+            
+        # 5. Create all ProjectMember entries in bulk
+        ProjectMember.objects.bulk_create(members_to_create)
 
     def perform_update(self, serializer):
         project = self.get_object()
@@ -96,9 +145,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
         
         allowed_roles_to_query = []
         if requester_role == ProjectMember.Role.OWNER:
-            allowed_roles_to_query = ['manager', 'developer', 'tester']
+            allowed_roles_to_query = ['manager', 'developer', 'tester','scrum_master']
         elif requester_role == ProjectMember.Role.MANAGER :
             allowed_roles_to_query = ['developer', 'tester']
+        elif requester_role == ProjectMember.Role.SCRUM_MASTER :
+            allowed_roles_to_query = ['developer', 'tester', 'manager']
 
         if role.lower() not in allowed_roles_to_query:
             return Response({"error": f"As a {requester_role}, you cannot query for available {role}s."}, status=status.HTTP_403_FORBIDDEN)
@@ -106,7 +157,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         existing_member_ids = ProjectMember.objects.filter(project=project).values_list('user_id', flat=True)
         available_users = User.objects.exclude(id__in=existing_member_ids)
         
-        global_role_map = {'manager': 'MANAGER', 'developer': 'DEVELOPER', 'tester': 'TESTER'}
+        global_role_map = {'manager': 'MANAGER', 'developer': 'DEVELOPER', 'tester': 'TESTER', 'scrum_master': 'SCRUM_MASTER' }
         role_to_filter_by = global_role_map.get(role.lower())
         if role_to_filter_by:
             available_users = available_users.filter(role=role_to_filter_by)
