@@ -42,56 +42,55 @@ class PermissionSerializer(serializers.ModelSerializer):
         fields = ['id', 'name', 'codename', 'app_label']
 
 class RoleSerializer(serializers.ModelSerializer):
-    """
-    Serializer for Managing Roles (Django Groups).
-    - READ: Returns full permission objects.
-    - WRITE: Accepts a list of permission IDs.
-    """
-    # READ: Show full permission details when fetching roles
     permissions = PermissionSerializer(many=True, read_only=True)
-    
-    # WRITE: Accept a list of permission IDs (e.g., [101, 102]) from the frontend
     permission_ids = serializers.ListField(
         child=serializers.IntegerField(), 
         write_only=True, 
         required=False
     )
-    
-    # READ: Show the number of users assigned to this role (optional utility)
     user_count = serializers.IntegerField(source='user_set.count', read_only=True)
 
     class Meta:
         model = Group
         fields = ['id', 'name', 'permissions', 'permission_ids', 'user_count']
+        # [FIX] Disable the default unique validator to handle it manually below
+        extra_kwargs = {
+            'name': {'validators': []}
+        }
+
+    def validate_name(self, value):
+        """
+        Manually check if a group with this name exists, 
+        BUT ignore the current group if we are updating it.
+        """
+        # If we are updating an existing instance...
+        if self.instance:
+            if Group.objects.filter(name=value).exclude(pk=self.instance.pk).exists():
+                raise serializers.ValidationError("A role with this name already exists.")
+        # If we are creating a new instance...
+        else:
+            if Group.objects.filter(name=value).exists():
+                raise serializers.ValidationError("A role with this name already exists.")
+        return value
 
     def create(self, validated_data):
         permission_ids = validated_data.pop('permission_ids', [])
-        
-        # 1. Create the Group (Role)
         role = Group.objects.create(**validated_data)
-        
-        # 2. Assign Permissions
         if permission_ids:
-            perms = Permission.objects.filter(id__in=permission_ids)
-            role.permissions.set(perms)
-            
+            role.permissions.set(Permission.objects.filter(id__in=permission_ids))
         return role
 
     def update(self, instance, validated_data):
         permission_ids = validated_data.pop('permission_ids', None)
         
-        # 1. Update Role Name
         instance.name = validated_data.get('name', instance.name)
         instance.save()
 
-        # 2. Update Permissions (if provided)
         if permission_ids is not None:
             perms = Permission.objects.filter(id__in=permission_ids)
-            # .set() replaces the old list with this new list
             instance.permissions.set(perms) 
             
-        return instance
-    
+        return instance    
 # Serializer for an owner to change a user's role
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
@@ -174,7 +173,7 @@ class AdminSignUpSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             first_name=validated_data.get('first_name', ''),
             last_name=validated_data.get('last_name', ''),
-   )
+            )
         return user
         
 
