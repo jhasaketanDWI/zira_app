@@ -11,7 +11,7 @@ from project.models import ProjectInvitation
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.core.mail import send_mail
-from common.permissions import IsOwnerUser,IsOwnerAdminOrScrumMaster, IsOwnerOrAdmin,IsOwnerAdminOrManager,IsOwnerAdminOrScrumMasterOrManager
+from common.permissions import IsOwnerUser,IsOwnerAdminOrScrumMaster, IsOwnerOrAdmin,IsOwnerAdminOrManager,IsOwnerAdminOrScrumMasterOrManager,RBACPermission
 from django.utils.crypto import get_random_string
 from django.db.models import Q
 from .serializers import(
@@ -19,9 +19,13 @@ from .serializers import(
      UserSignUpSerializer,
      AdminSignUpSerializer,
      AdminUserManagementSerializer,
-     InvitationSerializer, SetPasswordSerializer, UserRoleSerializer
+     InvitationSerializer, SetPasswordSerializer, UserRoleSerializer,
+     RoleSerializer, PermissionSerializer
      )
 from project.models import Project, ProjectMember
+from django.contrib.auth.models import Permission, Group
+
+
 
 # These imports are required to set up the Google social login endpoint
 from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
@@ -53,7 +57,22 @@ class UserViewSet(viewsets.ModelViewSet):
     """
     queryset = User.objects.all().order_by('-id').filter(is_deleted=False)
     
-    permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
+    # permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
+    permission_classes = [IsAuthenticated, RBACPermission]
+    perms_map = {
+        'list': 'user.can_view_all_users',
+        'retrieve': 'user.can_view_all_users',
+        'create': 'user.can_create_system_users',
+        'update': 'user.can_edit_users_info',
+        'partial_update': 'user.can_edit_users_info',
+        'destroy': 'user.can_delete_users',
+        
+        # Custom actions
+        'deactivate': 'user.can_edit_users_info', 
+        'activate': 'user.can_edit_users_info',
+        'reset_password': 'user.can_reset_passwords',
+    }
+
     def get_queryset(self):
         """
         Dynamically filter the queryset.
@@ -442,34 +461,82 @@ class UserRoleUpdateView(generics.UpdateAPIView):
     """
     queryset = User.objects.all()
     serializer_class = UserRoleSerializer
-    permission_classes = [IsOwnerUser,IsAuthenticated] # Only allows OWNERS
-
-class UserRolesView(APIView):
+    permission_classes = [IsOwnerUser,IsAuthenticated,RBACPermission] # Only allows OWNERS
+    perms_map = {
+        'update': 'user.can_edit_users_info', 
+        'partial_update': 'user.can_edit_users_info'
+    }
+class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     """
-    An endpoint to get the list of available roles for inviting users.
-    The list is filtered based on the role of the user making the request.
+    API: GET /api/rbac/permissions/
+    Lists all system permissions. The frontend uses this to populate the checkboxes.
     """
-    permission_classes = [IsAuthenticated]
+    # Exclude internal Django permissions to keep the list clean
+    queryset = Permission.objects.exclude(
+        content_type__app_label__in=['admin', 'contenttypes', 'sessions', 'authtoken']
+    ).order_by('content_type__app_label', 'codename')
+    
+    serializer_class = PermissionSerializer
+    permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
 
-    def get(self, request, *args, **kwargs):
-        all_roles = User.Role.choices
+class RoleViewSet(viewsets.ModelViewSet):
+    """
+    Unified Endpoint for Role Management.
+    
+    1. Standard CRUD (Admin Only):
+       - GET /api/rbac/roles/       -> List all roles
+       - POST /api/rbac/roles/      -> Create new role
+       - PUT /api/rbac/roles/{id}/  -> Update role permissions
+       
+    2. Invitable Roles (Authenticated Users):
+       - GET /api/rbac/roles/invitable/ -> List roles the user is allowed to invite
+    """
+    queryset = Group.objects.all().order_by('name')
+    serializer_class = RoleSerializer
+    
+    # default permission for standard CRUD is Admin Only
+    permission_classes = [IsAdminUser] 
+
+    def get_permissions(self):
+        """
+        Custom permissions:
+        - The 'invitable' action is accessible to any logged-in user (IsAuthenticated).
+        - Everything else (Create, Delete, List All) is restricted to Admins (IsAdminUser).
+        """
+        if self.action == 'invitable':
+            return [IsAuthenticated()]
+        return [IsAdminUser() or IsOwnerOrAdmin()]
+
+    @action(detail=False, methods=['get'], url_path='available-roles')
+    def invitable(self, request):
+        """
+        Replaces the old UserRolesView.
+        Returns a filtered list of roles based on the requester's hierarchy.
+        """
         user_role = getattr(request.user, 'role', None)
 
-        if user_role == User.Role.ADMIN:
-            invitable_roles = [role for role in all_roles if role[0] != User.Role.ADMIN]
-            return Response(invitable_roles)
+        # Define the hierarchy logic
+        HIERARCHY = {
+            'OWNER': ['ADMIN', 'MANAGER', 'SCRUM_MASTER', 'DEVELOPER', 'TESTER', 'VIEWER'],
+            'ADMIN': ['MANAGER', 'SCRUM_MASTER', 'DEVELOPER', 'TESTER', 'VIEWER'],
+            'SCRUM_MASTER': ['MANAGER', 'DEVELOPER', 'TESTER', 'VIEWER'],
+            'MANAGER': ['DEVELOPER', 'TESTER', 'VIEWER'],
+            # Developers/Testers typically cannot invite anyone
+            'DEVELOPER': [],
+            'TESTER': [],
+        }
 
-        if user_role == User.Role.OWNER:
-            invitable_roles = [role for role in all_roles if role[0] not in [User.Role.ADMIN, User.Role.OWNER]]
-            return Response(invitable_roles)
-        if user_role == User.Role.SCRUM_MASTER:
-            invitable_roles = [role for role in all_roles if role[0] in [User.Role.MANAGER,User.Role.DEVELOPER, User.Role.TESTER]]
-            return Response(invitable_roles)
-        if user_role == User.Role.MANAGER:
-            invitable_roles = [role for role in all_roles if role[0] in [User.Role.DEVELOPER, User.Role.TESTER]]
-            return Response(invitable_roles)
-
-        return Response([])
+        # Get allowed role names
+        allowed_names = HIERARCHY.get(user_role, [])
+        
+        # Fetch actual Group objects
+        groups = Group.objects.filter(name__in=allowed_names).order_by('name')
+        
+        # Use the serializer to return standard data structure
+        # (Pass 'many=True' because we are serializing a list of groups)
+        serializer = self.get_serializer(groups, many=True)
+        
+        return Response(serializer.data)
 
 
 class FilteredUserListView(generics.ListAPIView):

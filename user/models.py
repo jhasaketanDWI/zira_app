@@ -49,7 +49,17 @@ class CustomUserManager(BaseUserManager,SoftDeleteManager):
             raise ValueError('Superuser must have is_superuser=True.')
         return self.create_user(email, password, **extra_fields)
 
+
 class User(AbstractUser, AuditBaseModel, SoftDeleteModel):
+    class Meta:
+        # These will act as global system permissions
+        permissions = [
+            ("can_create_system_users", "User can add new users to the entire system"),
+            ("can_view_all_users", "User can see the list of all users across all projects"),
+            ("can_reset_passwords", "User can force a password reset for other users"),
+            ("can_delete_users", "User can delete users"),
+            ("can_edit_users_info", "User can edit other users' information"),
+        ]
 
     class Role(models.TextChoices):
         ADMIN = "ADMIN", "Admin"
@@ -58,11 +68,12 @@ class User(AbstractUser, AuditBaseModel, SoftDeleteModel):
         SCRUM_MASTER = "SCRUM_MASTER", "Scrum_Master"  
         DEVELOPER = "DEVELOPER", "Developer"
         TESTER = "TESTER", "Tester"
+        VIEWER = "VIEWER", "Viewer"
 
     # We don't need a username, email will be our unique identifier
     username = None
     email = models.EmailField(unique=True)
-    role = models.CharField(max_length=50, choices=Role.choices,default=Role.OWNER)
+    role = models.CharField(max_length=50, default=Role.OWNER)   
     phone = models.CharField(max_length=20, blank=True, null=True) # Add this line
 
 

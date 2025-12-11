@@ -5,6 +5,16 @@ from common.models import AuditBaseModel
 import uuid
 
 class Project(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_create_project", "User can create a brand new project instance"),
+            ("can_edit_project_details", "User can change project name, key, and description"),
+            ("can_archive_project", "User can archive or restore the project"),
+            ("can_manage_project_members", "User can add, remove, and change the roles of other users"),
+            ("can_manage_workflows", "User can create and edit custom workflow schemes"),
+            ("can_have_full_project_access", "User can do any changes on project including task, sprint, epic etc"),
+            ("can_delete_project", "User can delete a project"),
+        ]
     class Status(models.TextChoices):
         PLANNED = 'PLANNED', 'Planned'
         ONGOING = 'ONGOING', 'Ongoing'
@@ -58,11 +68,17 @@ class ProjectInvitation(AuditBaseModel):
     
     # This links to the user (either existing, or newly-created-inactive)
     user_to_invite = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, null=True, blank=True, related_name='project_invitations')
-
+    
     class Meta:
         # A user can only have one pending invitation for a specific project
         unique_together = ('project', 'email', 'status')
         ordering = ['-created_at']
+        
+        permissions = [
+            ("can_invite_member", "User can send project invitations"),
+            ("can_view_invitations", "User can view sent invitations"),
+            ("can_cancel_invitation", "User can revoke/cancel pending invitations"),
+        ]
 
     def __str__(self):
         return f"Invitation for {self.email} to join {self.project.name} as {self.role}"

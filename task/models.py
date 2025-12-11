@@ -13,15 +13,27 @@ class Status(AuditBaseModel):
     # project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='statuses')
     title = models.CharField(max_length=100, unique=True)
     order = models.PositiveIntegerField(default=0,help_text="Order of the column on the board")
-
     class Meta:
         verbose_name_plural = "Statuses"
         ordering = ['order']
+        permissions = [
+            ("can_create_status", "User can create new Kanban statuses/columns"),
+            ("can_edit_status", "User can rename or update existing statuses"),
+            ("can_delete_status", "User can delete a status column"),
+            ("can_reorder_status", "User can change the order of status columns"),
+        ]
+   
 
     def __str__(self):
         return self.title
 
 class Epic(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_create_epic", "User can create new Epics"),
+            ("can_edit_epic", "User can modify Epic details"),
+            ("can_delete_epic", "User can delete Epics"),
+        ]
     status = models.ForeignKey(Status, on_delete=models.SET_NULL, null=True, blank=True, related_name='epics')
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
     title = models.CharField(max_length=255)
@@ -33,6 +45,14 @@ class Epic(AuditBaseModel):
         return self.title
 
 class Sprint(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_create_sprint", "User can create a new sprint"),
+            ("can_start_sprint", "User can activate an upcoming sprint"),
+            ("can_end_sprint", "User can close an active sprint"),
+            ("can_move_to_backlog", "User can move items between a sprint and the backlog"),
+            ("can_edit_sprint", "User can edit sprint details"),
+        ]
     name = models.CharField(max_length=255)
     goal = models.TextField(blank=True, null=True)
     project = models.ForeignKey(Project, on_delete=models.CASCADE)
@@ -69,6 +89,13 @@ class Sprint(AuditBaseModel):
 
 
 class Goal(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_create_goal", "User can define new project goals"),
+            ("can_edit_goal", "User can update goal progress/status"),
+            ("can_delete_goal", "User can remove goals"),
+            ("can_view_goals", "User can view project goals"),
+        ]
     class StatusLabel(models.TextChoices):
         ON_TRACK = 'ON_TRACK', 'On Track'
         AT_RISK = 'AT_RISK', 'At Risk'
@@ -177,6 +204,23 @@ class Goal(AuditBaseModel):
     
 
 class Task(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_create_task", "User can create new Tasks/Tickets/Bugs"),
+            ("can_edit_tasks", "User can edit the title, description, and fields of any task"),
+            ("can_edit_task_own", "User can only edit tasks they reported/created"),
+            ("can_assign_task", "User can assign a task to any other project member or himself"),
+            ("can_change_status", "User can change the status of a task"),
+            ("can_change_priority", "User can change task priority"),
+            ("can_add_comment", "User can add comments to a task"),
+            ("can_manage_attachments", "User can add/remove attachments from a task"),
+            ("can_delete_task", "User can permanently delete tasks"),
+            ("can_view_all_tasks", "User can view tasks in the project"),
+            ("can_set_due_date", "User can set or modify task due dates"),
+            ("can_edit_story_points", "User can set or change story point estimates"),
+            ("can_link_tasks", "User can link tasks to other tasks")
+            
+        ]
 
     class Priority(models.TextChoices):
         LOW = 'LOW', 'Low'
@@ -266,6 +310,12 @@ class Tag(AuditBaseModel):
 
     class Meta:
         unique_together = ('project', 'name')
+        permissions = [
+            ("can_create_tag", "User can create new tags"),
+            ("can_delete_tag", "User can delete tags"),
+             # Editing tags (renaming) affects all tasks, so it's a higher privilege
+            ("can_manage_tags", "User can rename or merge tags"),
+        ]
 
     def __str__(self):
         return self.name
@@ -294,8 +344,16 @@ class Ticket(AuditBaseModel):
     def __str__(self):
         return f"{self.title} ({self.status})"
 
-# NEW MODEL: Stores the design of the form from your React Editor
 class FormTemplate(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_create_form_template", "User can design new form templates"),
+            ("can_edit_form_template", "User can modify form structures"),
+            ("can_delete_form_template", "User can delete form templates"),
+            # Note: Submitting a form usually just requires 'can_create_task', 
+            # but if you want it specific:
+            ("can_submit_form", "User can submit entries via forms"), 
+        ]
     class FormType(models.TextChoices):
         BUG = 'BUG', 'Bug'
         FEATURE = 'FEATURE', 'Feature'

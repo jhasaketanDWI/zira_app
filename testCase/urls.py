@@ -1,14 +1,30 @@
-from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import TestCaseViewSet
+from django.urls import path, include
+from .views import (
+    ModuleViewSet, TestSuiteViewSet, TestCaseViewSet,
+    TestRunViewSet, TestExecutionViewSet, TestPlanViewSet, 
+    EnvironmentViewSet, TestStepViewSet, TestTemplateViewSet,
+    TemplateStepViewSet,
+)
 
 # Create a simple router for this app
 router = DefaultRouter()
 
-# This registers the base /testcases/ endpoint
-router.register(r'testcases', TestCaseViewSet, basename='testcase')
+# This registers the endpoint
+router.register(r"modules", ModuleViewSet)
+router.register(r"suites", TestSuiteViewSet)
+router.register(r"cases", TestCaseViewSet)
+router.register(r"plans", TestPlanViewSet)
+router.register(r"runs", TestRunViewSet)
+router.register(r"executions", TestExecutionViewSet)
+router.register(r"environments", EnvironmentViewSet)
+router.register(r"steps", TestStepViewSet)
+
+# end points for template (optional)
+router.register(r"templates", TestTemplateViewSet)
+router.register(r"template-steps", TemplateStepViewSet)
 
 urlpatterns = [
     # Include the simple, non-nested URLs
-    path('', include(router.urls)),
+    path('testcase/', include(router.urls)),
 ]

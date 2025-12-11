@@ -12,3 +12,4 @@ django-cors-headers
 pytz
 markdown
 bleach
+celery

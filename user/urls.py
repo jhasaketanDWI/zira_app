@@ -14,10 +14,11 @@ from .views import(
     InviteUserView,
     SetPasswordView, 
     UserRoleUpdateView,
-    UserRolesView,
     FilteredUserListView,
     ManagerTeamListView,
     CurrentUserView,
+    RoleViewSet,
+    PermissionViewSet,
     )
 
 from rest_framework_simplejwt.views import (
@@ -27,6 +28,10 @@ from rest_framework_simplejwt.views import (
 
 
 router = DefaultRouter()
+router.register(r'roles', RoleViewSet, basename='roles')
+# Endpoint to view Permissions
+router.register(r'permissions', PermissionViewSet, basename='permissions')
+
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'admin/users', AdminUserViewSet, basename='admin-user')
 
@@ -65,7 +70,7 @@ urlpatterns = [
     # URL for an OWNER to change a user's role
     path('users/<int:pk>/change-role/', UserRoleUpdateView.as_view(), name='user-change-role'),
 
-    path('users/available-roles/', UserRolesView.as_view(), name='available-user-roles'),
+    path('users/available-roles/', RoleViewSet.as_view({'get': 'invitable'}), name='available-user-roles'),
     path('users/list/', FilteredUserListView.as_view(), name='user-list-by-role'),
     path('users/manager-team-list/', ManagerTeamListView.as_view(), name='manager-team-list'),
 
