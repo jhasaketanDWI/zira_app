@@ -476,7 +476,8 @@ class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     # Exclude internal Django permissions to keep the list clean
     queryset = Permission.objects.exclude(
         content_type__app_label__in=['admin', 'contenttypes', 'sessions', 'authtoken']
-    ).order_by('content_type__app_label', 'codename')
+    ).distinct().order_by('id')
+    # ).order_by('content_type__app_label', 'codename')
     
 
 class RoleViewSet(viewsets.ModelViewSet):
