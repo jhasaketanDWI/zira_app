@@ -16,6 +16,11 @@ class SubscriptionPlan(AuditBaseModel):
 
 
 class Subscription(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_manage_subscription", "User can change the project's subscription plan"),
+            ("can_edit_billing_info", "User can update payment methods and billing addresses"),
+        ]
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
     plan = models.ForeignKey(SubscriptionPlan, on_delete=models.PROTECT)
     start_date = models.DateField()
@@ -27,6 +32,10 @@ class Subscription(AuditBaseModel):
 
 
 class Invoice(AuditBaseModel):
+    class Meta:
+        permissions = [
+            ("can_view_all_invoices", "User can access the entire billing and invoice history"),
+        ]
     subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE)
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     period_start = models.DateField()

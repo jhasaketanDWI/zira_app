@@ -3,6 +3,66 @@ from django.core.exceptions import PermissionDenied
 from project.models import ProjectMember
 from user.models import User
 
+
+class RBACPermission(permissions.BasePermission):
+    """
+    Generic permission class that checks for required permissions 
+    based on the 'perms_map' defined in the ViewSet.
+    """
+    def has_permission(self, request, view):
+        # 1. Allow Superusers and Project Owners to bypass RBAC checks completely
+        # (Assuming your User model has a 'role' field or similar logic)
+        if request.user.is_superuser:
+            return True
+        if getattr(request.user, 'role', '') == 'OWNER':
+            return True
+
+        # 2. Get the permission map from the ViewSet
+        # This looks for a dictionary called 'perms_map' in your view
+        perms_map = getattr(view, 'perms_map', {})
+
+        # 3. Determine the required permission for the current action
+        # view.action is typically 'list', 'create', 'retrieve', 'update', 'destroy'
+        if hasattr(view, 'action'):
+            # ViewSets have an 'action' attribute (list, create, retrieve, etc.)
+            action = view.action
+        else:
+            # GenericAPIViews (CreateAPIView, etc.) rely on HTTP methods
+            method_mapper = {
+                'GET': 'retrieve', # Default assumption, can be overridden
+                'POST': 'create',
+                'PUT': 'update',
+                'PATCH': 'partial_update',
+                'DELETE': 'destroy'
+            }
+            action = method_mapper.get(request.method)
+        required_perm = perms_map.get(view.action)
+
+        # 4. If no specific permission is required for this action, allow it
+        # (This lets you mix RBAC with standard IsAuthenticated views)
+        if not required_perm:
+            return True
+
+        # 5. The Core Check: Does the user (via their Role/Group) have this permission?
+        if request.user.has_perm(required_perm):
+            return True
+        
+        return False
+    def has_object_permission(self, request, view, obj):
+        # This runs when accessing a specific task (GET /tasks/5/)
+        
+        # 1. Project Membership Check
+        # Assuming 'obj' is a Task, it has a .project attribute
+        project = getattr(obj, 'project', None)
+        if project:
+            is_member = ProjectMember.objects.filter(user=request.user, project=project).exists()
+            is_owner = project.owner == request.user
+            if not (is_member or is_owner or request.user.is_superuser):
+                return False  # Not even a member of this project!
+
+        # 2. Proceed with standard RBAC check
+        # (The view logic will handle the specific 'can_delete' check)
+        return True
 def check_project_permission(user, project, allowed_roles=None):
     """Utility function to check if user has required role for a project."""
     membership = ProjectMember.objects.filter(user=user, project=project).first()
@@ -35,13 +95,7 @@ class IsOwnerOrAdmin(permissions.BasePermission):
 
         # Write permissions are only allowed to the owner of the account or an admin.
         return obj == request.user or request.user.is_staff
-    # class IsOwnerOrAdmin(BasePermission):
-    # def has_permission(self, request, view):
-    #     return (
-    #         request.user and
-    #         request.user.is_authenticated and
-    #         request.user.role in [User.Role.OWNER, User.Role.ADMIN]
-    #     )
+ 
 
 class IsOwnerUser(permissions.BasePermission):
     """

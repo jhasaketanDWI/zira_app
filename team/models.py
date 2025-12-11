@@ -22,6 +22,14 @@ class Team(AuditBaseModel, models.Model):
         related_name='teams',
         through_fields=('team', 'user'),
     )
+    class Meta:
+        permissions = [
+            ("can_create_team", "User can create new teams"),
+            ("can_edit_team", "User can update team name and description"),
+            ("can_delete_team", "User can delete teams"),
+            ("can_view_all_teams", "User can view all teams (Admin view)"),
+        ]
+
 
     def __str__(self):
         return self.name
@@ -61,6 +69,11 @@ class TeamMember(AuditBaseModel, models.Model):
     class Meta:
         # A user can only be in a team once
         unique_together = ('team', 'user')
+        permissions = [
+            ("can_invite_team_members", "User can invite new members to the team"),
+            ("can_remove_team_members", "User can remove members from the team"),
+            ("can_manage_team_roles", "User can change the role of existing team members"),
+        ]
 
     def __str__(self):
         return f"{self.user.email} in {self.team.name} ({self.status})"

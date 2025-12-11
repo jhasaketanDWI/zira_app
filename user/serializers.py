@@ -26,6 +26,68 @@ class SetPasswordSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     token = serializers.UUIDField(required=True)
 
+
+from rest_framework import serializers
+from django.contrib.auth.models import Group, Permission
+
+class PermissionSerializer(serializers.ModelSerializer):
+    """
+    Read-only serializer to show available permissions.
+    """
+    app_label = serializers.CharField(source='content_type.app_label', read_only=True)
+
+    class Meta:
+        model = Permission
+        fields = ['id', 'name', 'codename', 'app_label']
+
+class RoleSerializer(serializers.ModelSerializer):
+    """
+    Serializer to manage Roles (Django Groups).
+    It has a special field 'permission_ids' to handle the assignment.
+    """
+    # READ: Show full permission details when fetching roles
+    permissions = PermissionSerializer(many=True, read_only=True)
+    
+    # WRITE: Accept a list of permission IDs (e.g., [1, 5, 20]) from the frontend
+    permission_ids = serializers.ListField(
+        child=serializers.IntegerField(), 
+        write_only=True, 
+        required=False
+    )
+
+    class Meta:
+        model = Group
+        fields = ['id', 'name', 'permissions', 'permission_ids']
+
+    def create(self, validated_data):
+        # Extract permission_ids from the payload
+        permission_ids = validated_data.pop('permission_ids', [])
+        
+        # 1. Create the Group (Role)
+        role = Group.objects.create(**validated_data)
+        
+        # 2. Attach the permissions
+        if permission_ids:
+            perms = Permission.objects.filter(id__in=permission_ids)
+            role.permissions.set(perms)
+            
+        return role
+
+    def update(self, instance, validated_data):
+        # Extract permission_ids if present
+        permission_ids = validated_data.pop('permission_ids', None)
+        
+        # 1. Update the Role Name
+        instance.name = validated_data.get('name', instance.name)
+        instance.save()
+
+        # 2. Update Permissions (if provided)
+        if permission_ids is not None:
+            perms = Permission.objects.filter(id__in=permission_ids)
+            # .set() replaces the old list with this new list
+            instance.permissions.set(perms) 
+            
+        return instance
 # Serializer for an owner to change a user's role
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:

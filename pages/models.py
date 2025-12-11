@@ -49,6 +49,13 @@ class Page(AuditBaseModel):
     class Meta:
         unique_together = ("project", "slug")
         ordering = ["path", "id"]
+        permissions = [
+            ("can_create_page", "User can create new documentation pages"),
+            ("can_edit_page", "User can update page title and hierarchy"),
+            ("can_delete_page", "User can delete documentation pages"),
+            ("can_archive_page", "User can archive or restore pages"),
+            ("can_view_pages", "User can view documentation pages"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.project.name} / {self.title}"
@@ -140,6 +147,11 @@ class PageVersion(AuditBaseModel):
     class Meta:
         unique_together = ("page", "version")
         ordering = ["-version"]
+        permissions = [
+            ("can_edit_page_content", "User can update content (create new versions)"),
+            ("can_view_page_history", "User can view historical versions of a page"),
+            ("can_revert_page_version", "User can revert page to a previous version"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.page.title} v{self.version}"
@@ -197,6 +209,10 @@ class PageAttachment(AuditBaseModel):
 
     class Meta:
         ordering = ["-created_at"]
+        permissions = [
+            ("can_upload_attachment", "User can upload files to pages"),
+            ("can_delete_attachment", "User can remove attached files"),
+        ]
 
     def __str__(self) -> str:
         return self.original_filename or f"Attachment #{self.pk}"
@@ -237,6 +253,9 @@ class TaskPageLink(AuditBaseModel):
     class Meta:
         unique_together = ("task", "page")
         ordering = ["-created_at"]
+        permissions = [
+            ("can_link_pages_to_tasks", "User can link/unlink pages to tasks"),
+        ]
 
     def __str__(self) -> str:
         return f"{self.task_id} ↔ {self.page_id}"
