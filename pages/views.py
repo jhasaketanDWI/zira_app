@@ -18,7 +18,7 @@ from .serializers import (
 )
 from project.models import Project
 from task.models import Task
-from common.permissions import check_project_permission
+from common.permissions import check_project_permission, RBACPermission
 
 
 class PageViewSet(viewsets.ModelViewSet):
@@ -39,9 +39,25 @@ class PageViewSet(viewsets.ModelViewSet):
 
     queryset = Page.objects.all().select_related("project", "parent")
     serializer_class = PageSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RBACPermission]
 
-
+    # [ADDED] Map actions to 'pages.codename' permissions
+    perms_map = {
+        # Standard CRUD
+        'list': 'pages.can_view_pages',
+        'retrieve': 'pages.can_view_pages',
+        'create': 'pages.can_create_page',
+        'update': 'pages.can_edit_page',         # Renaming/Moving
+        'partial_update': 'pages.can_edit_page',
+        'destroy': 'pages.can_delete_page',
+        
+        # Custom Actions
+        'versions': 'pages.can_view_page_history',
+        'restore': 'pages.can_revert_page_version',
+        'delete_version': 'pages.can_edit_page_content', # Deleting a version is a content edit
+        'upload_attachment': 'pages.can_upload_attachment',
+        'link_task': 'pages.can_link_pages_to_tasks',
+    }
     def get_queryset(self):
         """
         Limit pages to those belonging to projects where user is owner or a ProjectMember.

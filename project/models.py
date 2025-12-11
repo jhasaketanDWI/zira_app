@@ -12,7 +12,7 @@ class Project(AuditBaseModel):
             ("can_archive_project", "User can archive or restore the project"),
             ("can_manage_project_members", "User can add, remove, and change the roles of other users"),
             ("can_manage_workflows", "User can create and edit custom workflow schemes"),
-            ("can_have_full_project_access", "User can do any changes on project including task, sprint, epic etc"),
+            # ("can_have_full_project_access", "User can do any changes on project including task, sprint, epic etc"),
             ("can_delete_project", "User can delete a project"),
         ]
     class Status(models.TextChoices):

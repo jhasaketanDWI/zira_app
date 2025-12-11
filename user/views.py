@@ -471,13 +471,13 @@ class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     API: GET /api/rbac/permissions/
     Lists all system permissions. The frontend uses this to populate the checkboxes.
     """
+    serializer_class = PermissionSerializer
+    permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
     # Exclude internal Django permissions to keep the list clean
     queryset = Permission.objects.exclude(
         content_type__app_label__in=['admin', 'contenttypes', 'sessions', 'authtoken']
     ).order_by('content_type__app_label', 'codename')
     
-    serializer_class = PermissionSerializer
-    permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
 
 class RoleViewSet(viewsets.ModelViewSet):
     """

@@ -15,7 +15,7 @@ from rest_framework.views import APIView
 from user.models import User
 from rest_framework.decorators import action
 
-from common.permissions import IsOwnerAdminOrScrumMaster
+from common.permissions import IsOwnerAdminOrScrumMaster,RBACPermission
 from .permissions import IsTeamAdmin
 
 
@@ -27,8 +27,21 @@ class TeamViewSet(viewsets.ModelViewSet):
     - 'list': Returns teams the user is an accepted member of.
     """
     queryset = Team.objects.all()
-    permission_classes = [IsAuthenticated] # Base permission
-
+    permission_classes = [IsAuthenticated,RBACPermission] # Base permission
+    perms_map = {
+        # Team Management
+        'create': 'team.can_create_team',
+        'update': 'team.can_edit_team',
+        'partial_update': 'team.can_edit_team',
+        'destroy': 'team.can_delete_team',
+        
+        # Viewing logic (RBAC + get_queryset handles the security)
+        'list': 'team.can_view_all_teams',     # If user has this, they see ALL. If not, they see OWN.
+        'retrieve': 'team.can_view_all_teams', # Same logic applies
+        
+        # Custom Action
+        'invite_members': 'team.can_invite_team_members',
+    }
     def get_queryset(self):
         """
         --- MODIFIED ---
@@ -42,6 +55,9 @@ class TeamViewSet(viewsets.ModelViewSet):
         
         if user.role in [User.Role.OWNER, User.Role.ADMIN]:
             # Admins/Owners get to see all teams
+            return Team.objects.all().distinct()
+        
+        if user.has_perm('team.can_view_all_teams'):
             return Team.objects.all().distinct()
             
 
@@ -71,6 +87,8 @@ class TeamViewSet(viewsets.ModelViewSet):
 
         # Allow Admins/Owners to retrieve any team
         if user.role in [User.Role.OWNER, User.Role.ADMIN]:
+            return obj
+        if user.has_perm('team.can_view_all_teams'):
             return obj
 
         # Original logic for regular users

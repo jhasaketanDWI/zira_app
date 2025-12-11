@@ -1,3 +1,4 @@
+from django.contrib.auth.models import Group, Permission
 from rest_framework import serializers
 from .models import User, Invitation
 from django.utils import timezone
@@ -32,7 +33,7 @@ from django.contrib.auth.models import Group, Permission
 
 class PermissionSerializer(serializers.ModelSerializer):
     """
-    Read-only serializer to show available permissions.
+    Read-only serializer to display available permissions to the Admin.
     """
     app_label = serializers.CharField(source='content_type.app_label', read_only=True)
 
@@ -42,31 +43,34 @@ class PermissionSerializer(serializers.ModelSerializer):
 
 class RoleSerializer(serializers.ModelSerializer):
     """
-    Serializer to manage Roles (Django Groups).
-    It has a special field 'permission_ids' to handle the assignment.
+    Serializer for Managing Roles (Django Groups).
+    - READ: Returns full permission objects.
+    - WRITE: Accepts a list of permission IDs.
     """
     # READ: Show full permission details when fetching roles
     permissions = PermissionSerializer(many=True, read_only=True)
     
-    # WRITE: Accept a list of permission IDs (e.g., [1, 5, 20]) from the frontend
+    # WRITE: Accept a list of permission IDs (e.g., [101, 102]) from the frontend
     permission_ids = serializers.ListField(
         child=serializers.IntegerField(), 
         write_only=True, 
         required=False
     )
+    
+    # READ: Show the number of users assigned to this role (optional utility)
+    user_count = serializers.IntegerField(source='user_set.count', read_only=True)
 
     class Meta:
         model = Group
-        fields = ['id', 'name', 'permissions', 'permission_ids']
+        fields = ['id', 'name', 'permissions', 'permission_ids', 'user_count']
 
     def create(self, validated_data):
-        # Extract permission_ids from the payload
         permission_ids = validated_data.pop('permission_ids', [])
         
         # 1. Create the Group (Role)
         role = Group.objects.create(**validated_data)
         
-        # 2. Attach the permissions
+        # 2. Assign Permissions
         if permission_ids:
             perms = Permission.objects.filter(id__in=permission_ids)
             role.permissions.set(perms)
@@ -74,10 +78,9 @@ class RoleSerializer(serializers.ModelSerializer):
         return role
 
     def update(self, instance, validated_data):
-        # Extract permission_ids if present
         permission_ids = validated_data.pop('permission_ids', None)
         
-        # 1. Update the Role Name
+        # 1. Update Role Name
         instance.name = validated_data.get('name', instance.name)
         instance.save()
 
@@ -88,6 +91,7 @@ class RoleSerializer(serializers.ModelSerializer):
             instance.permissions.set(perms) 
             
         return instance
+    
 # Serializer for an owner to change a user's role
 class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
