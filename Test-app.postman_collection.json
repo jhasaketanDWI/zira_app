@@ -4212,20 +4212,133 @@
 			]
 		},
 		{
-			"name": "New Request",
-			"request": {
-				"method": "GET",
-				"header": []
-			},
-			"response": []
-		},
-		{
-			"name": "New Request",
-			"request": {
-				"method": "GET",
-				"header": []
-			},
-			"response": []
+			"name": "Authorization",
+			"item": [
+				{
+					"name": "get all permissions",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Sprint -3\",\n    \"goal\": \"Complete core l features.\",\n    \"project\": 1,\n    \"start_date\": \"2025-10-01\",\n    \"end_date\": \"2025-12-31\"\n    // \"epic\":1\n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/permissions/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"permissions",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "create role",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/roles/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"roles",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "update role",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [100,65 ,312,9] \n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/roles/{{role_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"roles",
+								"{{role_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "delete a role",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/roles/{{role_id}}/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"roles",
+								"{{role_id}}",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get all roles",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/roles/",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"roles",
+								""
+							]
+						}
+					},
+					"response": []
+				}
+			]
 		}
 	],
 	"auth": {
@@ -4310,6 +4423,16 @@
 		},
 		{
 			"key": "goal_id",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "invitation_id",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "role_id",
 			"value": "",
 			"type": "default"
 		}

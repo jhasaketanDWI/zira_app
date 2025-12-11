@@ -1,6 +1,8 @@
 from django.shortcuts import render
 from rest_framework import viewsets, permissions
 from common.utils import get_client_ip
+from common.permissions import RBACPermission
+from rest_framework.permissions import IsAuthenticated
 from .models import SubscriptionPlan, Subscription, Invoice
 from .serializers import SubscriptionPlanSerializer, SubscriptionSerializer, InvoiceSerializer
 
@@ -30,7 +32,20 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     API endpoint that allows users to view and manage their own subscriptions.
     """
     serializer_class = SubscriptionSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated,RBACPermission]
+    perms_map = {
+        # Viewing subscription details requires permission (usually Owner/Billing Admin)
+        'list': 'billing.can_manage_subscription',
+        'retrieve': 'billing.can_manage_subscription',
+        
+        # Creating/Upgrading plans
+        'create': 'billing.can_manage_subscription',
+        'update': 'billing.can_manage_subscription',
+        'partial_update': 'billing.can_manage_subscription',
+        
+        # Canceling subscription
+        'destroy': 'billing.can_manage_subscription',
+    }
 
     def get_queryset(self):
         """
@@ -58,7 +73,19 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     API endpoint that allows users to view invoices for their subscriptions.
     """
     serializer_class = InvoiceSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAuthenticated,RBACPermission]
+    perms_map = {
+        # Viewing invoices
+        'list': 'billing.can_view_all_invoices',
+        'retrieve': 'billing.can_view_all_invoices',
+        
+        # Creating/Editing invoices is typically automated or Admin-only,
+        # but if exposed, it requires high-level billing permissions.
+        'create': 'billing.can_manage_subscription', 
+        'update': 'billing.can_manage_subscription',
+        'partial_update': 'billing.can_manage_subscription',
+        'destroy': 'billing.can_manage_subscription',
+    }
 
     def get_queryset(self):
         """

@@ -18,6 +18,7 @@ from django.contrib.contenttypes.models import ContentType
 from rest_framework.exceptions import PermissionDenied
 from user.models import User
 from .serializers import FormTemplateSerializer, FormSubmissionSerializer,GoalSerializer
+from common.permissions import RBACPermission
 
 
 
@@ -59,6 +60,17 @@ class ActivityViewSet(viewsets.ModelViewSet):
 class EpicViewSet(viewsets.ModelViewSet):
     queryset = Epic.objects.all().order_by("-id")
     serializer_class = EpicSerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
+
+    perms_map = {
+        'create': 'tasks.can_create_epic',
+        'list': 'tasks.can_view_all_tasks', # Or create specific 'can_view_epics'
+        'retrieve': 'tasks.can_view_all_tasks',
+        'update': 'tasks.can_edit_epic',
+        'partial_update': 'tasks.can_edit_epic',
+        'destroy': 'tasks.can_delete_epic',
+    }
+    
 
     def get_queryset(self):
         user = self.request.user
@@ -82,22 +94,32 @@ class EpicViewSet(viewsets.ModelViewSet):
 class SprintViewSet(viewsets.ModelViewSet):
     queryset = Sprint.objects.all().order_by("-id")
     serializer_class = SprintSerializer
-    permission_classes = [IsAuthenticated, IsProjectMember,IsOwnerOrAdmin]
+    permission_classes = [IsAuthenticated, RBACPermission]
 
+    perms_map = {
+        'create': 'tasks.can_create_sprint',
+        'list': 'tasks.can_view_all_tasks',
+        'retrieve': 'tasks.can_view_all_tasks',
+        'update': 'tasks.can_edit_sprint',
+        'partial_update': 'tasks.can_edit_sprint',
+        'destroy': 'tasks.can_delete_sprint', # Make sure to add this to models.py if missing
+
+        # Custom Actions
+        'activate': 'tasks.can_start_sprint',
+        'end': 'tasks.can_end_sprint',
+        'check_active_sprint': 'tasks.can_view_all_tasks',
+        'dashboard': 'tasks.can_view_all_tasks',
+        'tickets': 'tasks.can_view_all_tasks',
+    }
     def get_queryset(self):
         user = self.request.user
-        
-        # 1. Base Security: Only show sprints for projects the user is a member/owner of
         queryset = Sprint.objects.filter(
             Q(project__owner=user) | Q(project__projectmember__user=user)
         ).distinct().order_by("-id")
 
-        # 2. ✅ FIX: Check if called from nested URL (/projects/{pk}/sprints/)
-        # 'project_pk' comes from the nested router lookup
         if 'project_pk' in self.kwargs:
             queryset = queryset.filter(project_id=self.kwargs['project_pk'])
             
-        # 3. Optional: Support query param filtering (?project_id=1)
         project_param = self.request.query_params.get('project_id')
         if project_param:
             queryset = queryset.filter(project_id=project_param)
@@ -106,7 +128,7 @@ class SprintViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
-        check_project_permission(self.request.user, project)  # Owner/PM only
+        check_project_permission(self.request.user, project)
         serializer.save(owner=self.request.user)
 
     def perform_update(self, serializer):
@@ -116,144 +138,95 @@ class SprintViewSet(viewsets.ModelViewSet):
    
     @action(detail=False, methods=['get'], url_path='check-active')
     def check_active_sprint(self, request):
-        """
-        Checks if a project has an active sprint.
-        Requires `project_id` as a query parameter.
-        Example: /api/sprints/check-active/?project_id=1
-        """
         project_id = request.query_params.get('project_id')
-
         if not project_id:
-            return Response(
-                {"error": "A 'project_id' query parameter is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "A 'project_id' query parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             project = Project.objects.get(pk=project_id)
         except Project.DoesNotExist:
-            return Response(
-                {"error": "Project not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        check_project_permission(
-            request.user, 
-            project, 
-            allowed_roles=[
-                User.Role.OWNER,
-                User.Role.ADMIN,
-                User.Role.MANAGER,
-                User.Role.SCRUM_MASTER
-            ]
-        )
+        # Basic membership check
+        check_project_permission(request.user, project, allowed_roles=[])
 
-        # Find the first active sprint for this project
-        active_sprint = Sprint.objects.filter(
-            project=project, 
-            is_active=True
-        ).first()
+        active_sprint = Sprint.objects.filter(project=project, is_active=True).first()
 
         if active_sprint:
             serializer = self.get_serializer(active_sprint)
-            return Response({
-                "is_active_sprint": True,
-                "sprint": serializer.data
-            }, status=status.HTTP_200_OK)
+            return Response({"is_active_sprint": True, "sprint": serializer.data}, status=status.HTTP_200_OK)
         else:
-            return Response({
-                "is_active_sprint": False,
-                "sprint": None
-            }, status=status.HTTP_200_OK)
-    @action(detail=True, methods=["patch"],url_path='activate')
+            return Response({"is_active_sprint": False, "sprint": None}, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=["patch"], url_path='activate')
     def activate(self, request, pk=None):
-        """Custom action to activate a sprint (only one active sprint per project)."""
+        """RBAC: tasks.can_start_sprint"""
         sprint = self.get_object()
         check_project_permission(request.user, sprint.project)
 
-        # Deactivate other sprints in the same project
         Sprint.objects.filter(project=sprint.project).update(is_active=False)
         sprint.is_active = True
         sprint.save()
-
         return Response({"status": "Sprint activated successfully."}, status=status.HTTP_200_OK)
     
-    @action(detail=True, methods=["patch"],url_path='end')
+    @action(detail=True, methods=["patch"], url_path='end')
     def end(self, request, pk=None):
+        """RBAC: tasks.can_end_sprint"""
         sprint = self.get_object()
         check_project_permission(request.user, sprint.project)
 
         if sprint.is_ended:
             return Response({"detail": "Sprint is already ended."}, status=status.HTTP_400_BAD_REQUEST)
 
-        # Find any tasks in this sprint that are NOT in a 'Done' status.
-        # The '__iexact' makes the check case-insensitive.
         unfinished_tasks = sprint.sprint_tasks.exclude(status__title__iexact='Done')
         if unfinished_tasks.exists():
-            # If any unfinished tasks exist, block the action and return an error.
             return Response(
-                {
-                    "error": "Cannot end sprint while it contains incomplete tasks.",
-                    "detail": "Please move all tasks that are not 'Done' to the backlog or another sprint before proceeding."
-                },
+                {"error": "Cannot end sprint while it contains incomplete tasks.", "detail": "Move tasks to backlog first."},
                 status=status.HTTP_400_BAD_REQUEST
             )
         sprint.is_active = False
         sprint.is_ended = True
         sprint.save()
-
         return Response({"status": "Sprint ended successfully."}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"])
     def tickets(self, request, pk=None):
         sprint = self.get_object()
         check_project_permission(request.user, sprint.project)
-
         tickets = sprint.tickets.all()
         serializer = TicketSerializer(tickets, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=False, methods=['get'], url_path='dashboard')
     def dashboard(self, request):   
-        """
-        Provides a structured list of sprints for the dashboard view.
-        You can filter by project by adding a `?project=<project_id>` query parameter.
-        """
         queryset = self.get_queryset()
-
-        # Get the project ID from the URL (e.g., /dashboard/?project=1)
         project_id = request.query_params.get('project')
-        
-        # Correctly filter the queryset if a project ID is provided
         if project_id:
             queryset = queryset.filter(project_id=project_id)
         
-        # 1. Active Sprints: Started but not completed
         active_sprints = queryset.filter(is_active=True, is_ended=False)
-        
-        # 2. Upcoming Sprints: Created but not started or ended
         upcoming_sprints = queryset.filter(is_active=False, is_ended=False)
-        
-        # 3. Completed Sprints (is_ended=True)
         completed_sprints = queryset.filter(is_ended=True)
-        # Serialize the data for the response
-        active_serializer = self.get_serializer(active_sprints, many=True)
-        upcoming_serializer = self.get_serializer(upcoming_sprints, many=True)
-        completed_serializer = self.get_serializer(completed_sprints, many=True)
 
-        
-        # Structure the final JSON response with all three sections
         response_data = {
-        'active_sprints': active_serializer.data,
-        'upcoming_sprints': upcoming_serializer.data,
-        'completed_sprints': completed_serializer.data
-    }
-        
+            'active_sprints': self.get_serializer(active_sprints, many=True).data,
+            'upcoming_sprints': self.get_serializer(upcoming_sprints, many=True).data,
+            'completed_sprints': self.get_serializer(completed_sprints, many=True).data
+        }
         return Response(response_data, status=status.HTTP_200_OK)
 
 class TicketViewSet(viewsets.ModelViewSet):
     queryset = Ticket.objects.all()
     serializer_class = TicketSerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
+    perms_map = {
+        'create': 'tasks.can_create_task', # Tickets are small tasks
+        'update': 'tasks.can_edit_tasks',
+        'destroy': 'tasks.can_delete_task',
+        'list': 'tasks.can_view_all_tasks',
+        'retrieve': 'tasks.can_view_all_tasks',
+    }
+
 
     def perform_create(self, serializer):
         # Assuming you want to add permission check here as well
@@ -275,6 +248,16 @@ class TagViewSet(viewsets.ModelViewSet):
     """
     queryset = Tag.objects.all().order_by('name')
     serializer_class = TagSerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
+
+    perms_map = {
+        'create': 'tasks.can_create_tag',
+        'update': 'tasks.can_manage_tags',
+        'partial_update': 'tasks.can_manage_tags',
+        'destroy': 'tasks.can_delete_tag',
+        'list': 'tasks.can_view_all_tasks',
+        'retrieve': 'tasks.can_view_all_tasks',
+    }
 
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
@@ -300,7 +283,19 @@ class GoalViewSet(viewsets.ModelViewSet):
     """
     queryset = Goal.objects.all().order_by('-id')
     serializer_class = GoalSerializer
-    permission_classes = [IsAuthenticated, IsProjectMember,IsOwnerOrAdmin]
+    permission_classes = [IsAuthenticated, RBACPermission]
+
+    perms_map = {
+        'create': 'tasks.can_create_goal',
+        'update': 'tasks.can_edit_goal',
+        'partial_update': 'tasks.can_edit_goal',
+        'destroy': 'tasks.can_delete_goal',
+        'list': 'tasks.can_view_goals',
+        'retrieve': 'tasks.can_view_goals',
+        'my_goals': 'tasks.can_view_goals',
+        'off_track_goals': 'tasks.can_view_goals',
+    }    
+    
     def check_user_role(self, user, allowed_roles):
         """
         Determines if the user holds an allowed role for the current project.
@@ -324,52 +319,33 @@ class GoalViewSet(viewsets.ModelViewSet):
         user = self.request.user
         project_pk = self.kwargs.get('project_pk')
 
-        # 1. Base Security: Filter by projects user has access to
         queryset = Goal.objects.filter(
             Q(project__owner=user) | Q(project__projectmember__user=user)
         ).distinct()
 
-        # 2. Filter by Project ID (e.g., /api/goals/?project_id=1)
         if project_pk:
-            # This is the crucial step to ensure goals are always limited 
-            # to the project specified in the URL.
             queryset = queryset.filter(project_id=project_pk)
 
-        
-      
-
-        # 3. Filter by Sprint ID (e.g., /api/goals/?sprint_id=5)
         sprint_id = self.request.query_params.get('sprint_id')
         if sprint_id:
             queryset = queryset.filter(sprint_id=sprint_id)
 
-        # 4. Filter by Parent (for root level goals)
-        # If you only want top-level goals in the main list:
         if self.request.query_params.get('root_only') == 'true':
             queryset = queryset.filter(parent__isnull=True)
 
-        return queryset.order_by('-id')  # Apply default ordering
+        return queryset.order_by('-id')
+
     @action(detail=False, methods=['get'], url_path='my-goals')
     def my_goals(self, request, project_pk=None):
-        """
-        API: GET /api/goals/my-goals/?project_id=1
-        Fetches ONLY goals for sprints where the logged-in user has assigned tasks.
-        """
         user = request.user
-        # Start with the base queryset (Project Security)
         queryset = self.get_queryset()
 
-        high_level_roles = ['OWNER', 'ADMIN', 'SCRUM_MASTER', 'MANAGER']
-        
-        # # Check if the user is a high-level role in this project
-        if self.check_user_role(user, high_level_roles):
-            pass         
-        else:    
-            # Regular members see ONLY goals linked to sprints where they have tasks assigned.
+        # If user has explicit permission to view all goals (Manager/Owner), show all.
+        # Otherwise, filter to goals related to their tasks.
+        if not user.has_perm('tasks.can_view_goals'):
             queryset = queryset.filter(
                 sprint__sprint_tasks__assignees__user=user
             ).distinct()
-        
         
         page = self.paginate_queryset(queryset)
         if page is not None:
@@ -381,40 +357,27 @@ class GoalViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'], url_path='off-track')
     def off_track_goals(self, request, project_pk=None):
-        """
-        API: GET /api/goals/off-track/?project_id=1
-        Fetches goals that are logically 'OFF_TRACK'.
-        Logic: The linked Sprint's end_date is in the past (yesterday or older).
-        """
         queryset = self.get_queryset()
         today = timezone.now().date()
-        
-        # Logic for OFF_TRACK: Sprint end date is strictly less than today
         queryset = queryset.filter(sprint__end_date__lt=today)
         
         page = self.paginate_queryset(queryset)
         if page is not None:
             serializer = self.get_serializer(page, many=True)
             return self.get_paginated_response(serializer.data)
-
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
     def perform_create(self, serializer):
         project = serializer.validated_data.get("project")
         if not project:
-            # If project is not passed explicitly, try to infer it from the sprint
             sprint = serializer.validated_data.get("sprint")
-            if sprint:
-                project = sprint.project
+            if sprint: project = sprint.project
         
         if not project:
              raise serializers.ValidationError({"project": "Project is required."})
 
-        # Security check
         check_project_permission(self.request.user, project, allowed_roles=[])
-        
-        # Save the goal (owner logic is handled in models.py save() method now)
         serializer.save(project=project)
 
     def perform_update(self, serializer):
@@ -425,7 +388,6 @@ class GoalViewSet(viewsets.ModelViewSet):
     def perform_destroy(self, instance):
         check_project_permission(self.request.user, instance.project)
         instance.delete()
-
 class TaskViewSet(viewsets.ModelViewSet):
     """
     API endpoint for tasks, providing full CRUD functionality.
@@ -433,145 +395,117 @@ class TaskViewSet(viewsets.ModelViewSet):
     """
     queryset = Task.objects.all().order_by('-id')
     serializer_class = TaskSerializer
-    permission_classes = [IsAuthenticated, IsProjectMember]
+    permission_classes = [IsAuthenticated, RBACPermission]
 
+    perms_map = {
+        'create': 'tasks.can_create_task',
+        'list': 'tasks.can_view_all_tasks', # The queryset handles "view own" fallback
+        'retrieve': 'tasks.can_view_all_tasks',
+        'update': 'tasks.can_edit_tasks',
+        'partial_update': 'tasks.can_edit_tasks',
+        'destroy': 'tasks.can_delete_task',
+
+        # Custom Actions
+        'create_status': 'tasks.can_create_status', # Admin only usually
+        'update_task_status': 'tasks.can_change_status',
+        'update_status': 'tasks.can_change_status',
+        'update_assignees': 'tasks.can_assign_task',
+        'update_description': 'tasks.can_edit_tasks',
+        'update_priority': 'tasks.can_change_priority',
+        'update_due_date': 'tasks.can_set_due_date',
+        'update_story_points': 'tasks.can_edit_story_points',
+        'set_parent_task': 'tasks.can_link_tasks', # or edit_tasks
+        'add_activity': 'tasks.can_add_comment',
+        'update_activity': 'tasks.can_add_comment',
+        'delete_activity': 'tasks.can_add_comment',
+        'sprint': 'tasks.can_move_to_backlog', # Moving task to sprint/backlog
+        'by_status': 'tasks.can_view_all_tasks',
+    }
     def get_queryset(self):
         user = self.request.user
         queryset = Task.objects.filter(
-        Q(project__owner=user) | Q(project__projectmember__user=user)
-    ).distinct()
-        # base_queryset = Task.objects.filter(
-        #     Q(project__owner=user) | Q(project__projectmember__user=user)
-        # )
-        # privileged_roles = [
-        #     User.Role.OWNER,
-        #     User.Role.ADMIN,
-        #     User.Role.MANAGER,
-        #     User.Role.SCRUM_MASTER 
-        # ]
+            Q(project__owner=user) | Q(project__projectmember__user=user)
+        ).distinct()
 
-        # 3. Check the user's role
-        # if user.role not in privileged_roles:
-        #     # This user is a 'DEVELOPER' or another restricted role.
-        #     # Filter the query to *only* tasks where they are an assignee.
-        #     # 'assignees__user' looks through the ProjectMember M2M to find the user.
-        #     base_queryset = base_queryset.filter(assignees__user=user)
-
-         # Check if the URL is nested under a project
         if 'project_pk' in self.kwargs:
-            project_pk = self.kwargs['project_pk']
-            queryset = queryset.filter(project_id=project_pk)
+            queryset = queryset.filter(project_id=self.kwargs['project_pk'])
+
+        # RBAC Visibility Check
         if user.has_perm('tasks.can_view_all_tasks'):
             return queryset.order_by('-id')
         
-        
+        # Restricted view for roles without full view permission
         return queryset.filter(assignees__user=user).order_by('-id')
-        # return base_queryset.order_by('-id').distinct()
-    # --- Helper method for partial updates ---
 
     def _update_task_field(self, request, pk, serializer_class):
         task = self.get_object()
-        
-        check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can update specific fields but it should be done by project owner only
-        
+        check_project_permission(request.user, task.project, allowed_roles=[])
         serializer = serializer_class(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(TaskSerializer(task, context={'request': request}).data, status=status.HTTP_200_OK)
 
-
     def perform_create(self, serializer):
         project = None
-        # If called from a nested URL, get the project from the URL
         if 'project_pk' in self.kwargs:
-            project_pk = self.kwargs['project_pk']
-            project = get_object_or_404(Project, pk=project_pk)
+            project = get_object_or_404(Project, pk=self.kwargs['project_pk'])
         else:
-            # Otherwise, get it from the serializer's validated data
             project = serializer.validated_data.get('project')
 
         if not project:
             raise serializers.ValidationError({"project": "Project not found or not provided."})
 
-        # Any project member can create tasks
         check_project_permission(self.request.user, project, allowed_roles=[])
+        
         task_instance = None
-        # Set the reporter to the current user's project member profile if not provided
         if 'reporter' not in serializer.validated_data:
             reporter = self.request.user.projectmember_set.filter(project=project).first()
             if reporter:
                 task_instance = serializer.save(reporter=reporter)
-            else: # Fallback if user is not a project member (though permission check should prevent this)
+            else:
                 task_instance = serializer.save(project=project)
-
         else:
             task_instance = serializer.save(project=project)
 
-        #Track creation activity
         ActivityLog.objects.create(
-            project=project,
-            task=task_instance,
-            user=self.request.user,
-            action_type='CREATE',
-            details={'title': task_instance.title}
+            project=project, task=task_instance, user=self.request.user,
+            action_type='CREATE', details={'title': task_instance.title}
         )
-
 
     def perform_update(self, serializer):
         project = serializer.instance.project
-        # Any project member can update tasks
         check_project_permission(self.request.user, project, allowed_roles=[])
-        original_instance = self.get_object()
+        updated_instance = serializer.save()
 
-        updated_instance=serializer.save()
-
-        
-        #Track updated activities
         ActivityLog.objects.create(
-            project=project,
-            task=updated_instance,
-            user=self.request.user,
-            action_type='UPDATE',
-            details={'title': updated_instance.title, 'message': 'Task details were updated.'}
+            project=project, task=updated_instance, user=self.request.user,
+            action_type='UPDATE', details={'title': updated_instance.title, 'message': 'Task details were updated.'}
         )
 
     def perform_destroy(self, instance):
-        # Only Owner/PM can delete tasks
         check_project_permission(self.request.user, instance.project)
         instance.delete()
     
-    # Custom action to create a status
     @action(detail=False, methods=['post'], url_path='create-status', permission_classes=[IsAuthenticated, IsAdminUser])
     def create_status(self, request):
-        """
-        Custom action to create a new status.
-        Note: The recommended approach is to use the POST /statuses/ endpoint.
-        """
+        """Usually Admin only, handled by StatusViewSet normally."""
         serializer = StatusSerializer(data=request.data)
         if serializer.is_valid():
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    # Custom action to update only the status of a task
     @action(detail=True, methods=['patch'], url_path='status')
     def update_task_status(self, request, pk=None):
-        """
-        Custom action to update only the status of a task.
-        """
+        """RBAC: tasks.can_change_status"""
         task = self.get_object()
-        # Any project member can update task status
         check_project_permission(self.request.user, task.project, allowed_roles=[])
 
         serializer = TaskStatusUpdateSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            #Log the status change
-            print("Creating ActivityLog...")
             ActivityLog.objects.create(
-                project=task.project,
-                task=task,
-                user=request.user,
+                project=task.project, task=task, user=request.user,
                 action_type='STATUS_UPDATE',
                 details={
                     'title': task.title,
@@ -579,44 +513,26 @@ class TaskViewSet(viewsets.ModelViewSet):
                     'message': f"Task status updated to {serializer.validated_data.get('status')}."
                 }
             )
-            print("ActivityLog created successfully.")
-            # Return the full task data for context
             return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
-    
     @action(detail=False, methods=['get'], url_path='by-status')
     def by_status(self, request):
-        """
-        Retrieves all tasks for a given project, grouped by their status.
-        Requires a `project_id` query parameter.
-        Example: /api/tasks/by-status/?project_id=1
-        """
         project_id = request.query_params.get('project_id')
-
         if not project_id:
-            return Response(
-                {"error": "A 'project_id' query parameter is required."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            return Response({"error": "A 'project_id' query parameter is required."}, status=status.HTTP_400_BAD_REQUEST)
 
         try:
             project = Project.objects.get(pk=project_id)
         except Project.DoesNotExist:
-            return Response(
-                {"error": "Project not found."},
-                status=status.HTTP_404_NOT_FOUND
-            )
+            return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
 
         check_project_permission(request.user, project, allowed_roles=[])
 
         all_statuses = StatusModel.objects.all().order_by('order')
-
         project_tasks = Task.objects.filter(project=project).select_related(
             'status', 'reporter__user'
-        ).prefetch_related(
-            'assignees__user', 'tags'
-        )
+        ).prefetch_related('assignees__user', 'tags')
 
         tasks_grouped_by_status = {task.status_id: [] for task in project_tasks}
         for task in project_tasks:
@@ -626,112 +542,79 @@ class TaskViewSet(viewsets.ModelViewSet):
         for s in all_statuses:
             tasks_for_this_status = tasks_grouped_by_status.get(s.id, [])
             task_serializer = TaskBoardSerializer(tasks_for_this_status, many=True)
-            
-            response_data.append({
-                'id': s.id,
-                'title': s.title,
-                'tasks': task_serializer.data
-            })
+            response_data.append({'id': s.id, 'title': s.title, 'tasks': task_serializer.data})
             
         return Response(response_data, status=status.HTTP_200_OK)
 
-    # --- Custom Actions for Partial Updates ---
     @action(detail=True, methods=['patch'], url_path='status')
     def update_status(self, request, pk=None):
-        """PATCH request to update only the task's status."""
         return self._update_task_field(request, pk, TaskStatusUpdateSerializer)
 
     @action(detail=True, methods=['patch'], url_path='assignees')
     def update_assignees(self, request, pk=None):
-        """PATCH request to update only the task's assignees."""
         return self._update_task_field(request, pk, TaskAssigneesUpdateSerializer)
         
     @action(detail=True, methods=['patch'], url_path='description')
     def update_description(self, request, pk=None):
-        """PATCH request to update only the task's description."""
         return self._update_task_field(request, pk, TaskDescriptionUpdateSerializer)
 
     @action(detail=True, methods=['patch'], url_path='parent')
     def set_parent_task(self, request, pk=None):
-        """PATCH request to set/unset a task's parent (making it a subtask)."""
         return self._update_task_field(request, pk, TaskSubtaskUpdateSerializer)
 
     @action(detail=True, methods=['patch'], url_path='due-date')
     def update_due_date(self, request, pk=None):
-        """PATCH request to update only the task's due date."""
         return self._update_task_field(request, pk, TaskDueDateUpdateSerializer)
 
     @action(detail=True, methods=['patch'], url_path='story-points')
     def update_story_points(self, request, pk=None):
-        """PATCH request to update only the task's story points."""
         return self._update_task_field(request, pk, TaskStoryPointsUpdateSerializer)
 
     @action(detail=True, methods=['patch'], url_path='priority')
     def update_priority(self, request, pk=None):
         task = self.get_object()
-
-        # Update the priority
         serializer = TaskPriorityUpdateSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-
-            # Log the priority change
-            new_priority = serializer.validated_data.get('priority')
             ActivityLog.objects.create(
-                project=task.project,
-                task=task,
-                user=request.user,
+                project=task.project, task=task, user=request.user,
                 action_type='PRIORITY_UPDATE',
-                details={
-                    'title': task.title,
-                    'new_priority': str(new_priority),
-                    'message': f"Task priority updated to {new_priority}."
-                }
+                details={'title': task.title, 'new_priority': str(serializer.validated_data.get('priority'))}
             )
-
-            # Return the full task data
             return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
     @action(detail=True, methods=['post'], url_path='add-activity')
     def add_activity(self, request, pk=None):
-        """Creates a new comment activity for the task."""
         task = self.get_object()
-        check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can add comment activity
+        check_project_permission(request.user, task.project, allowed_roles=[])
         context = self.get_serializer_context()
         serializer = ActivitySerializer(data=request.data, context=context)
-        
         serializer.is_valid(raise_exception=True)
         serializer.save(task=task)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
     @action(detail=True, methods=['get'], url_path='activities')
     def activities(self, request, pk=None):
-        """Fetches the list of all comment activities for the task."""
         task = self.get_object()
         activities_with_comments = task.activity_log.filter(comment__isnull=False)
-
         context = self.get_serializer_context()
         serializer = ActivitySerializer(activities_with_comments, many=True, context=context)
-        
         return Response(serializer.data)
 
     @action(detail=True, methods=['put'], url_path='update-activity/(?P<activity_id>[^/.]+)')
     def update_activity(self, request, pk=None, activity_id=None):
-        """Updates the message of a specific comment."""
         task = self.get_object()
         try:
             activity = task.activity_log.get(id=activity_id)
         except Activity.DoesNotExist:
             return Response({'detail': 'Activity not found'}, status=status.HTTP_404_NOT_FOUND)
-        check_project_permission(request.user, task.project, allowed_roles=[]) # Any project member can update comment activity
+        check_project_permission(request.user, task.project, allowed_roles=[])
         context = self.get_serializer_context()
         serializer = ActivitySerializer(activity, data=request.data, partial=True, context=context)
-
         serializer.is_valid(raise_exception=True)
         serializer.save()
         return Response(serializer.data)
-
 
     @action(detail=True, methods=['delete'], url_path='delete-activity/(?P<activity_id>[^/.]+)')
     def delete_activity(self, request, pk=None, activity_id=None):
@@ -740,24 +623,18 @@ class TaskViewSet(viewsets.ModelViewSet):
             activity = task.activity_log.get(id=activity_id)
         except Activity.DoesNotExist:
             return Response({'detail': 'Activity not found'}, status=status.HTTP_404_NOT_FOUND)
-        
         activity.delete()
         return Response({'detail': 'Activity deleted successfully'}, status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['patch'], serializer_class=TaskSprintUpdateSerializer)
     def sprint(self, request, pk=None):
-        """
-        A dedicated endpoint to update the sprint of a task.
-        Accepts PATCH requests to /api/tasks/{id}/sprint/
-        """
+        """RBAC: tasks.can_move_to_backlog"""
         task = self.get_object()
-        
-        #check_project_permission(request.user, task.project) # Any project member can update task sprint
         serializer = self.get_serializer(task, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        # After updating, return the full task object
         return Response(TaskSerializer(task).data)
+
 
 class StatusViewSet(viewsets.ModelViewSet):
     """
@@ -765,8 +642,15 @@ class StatusViewSet(viewsets.ModelViewSet):
     """
     queryset = StatusModel.objects.all().order_by('id')
     serializer_class = StatusSerializer
-    permission_classes = [IsAuthenticated, HasFullTaskAccess]  # Only admin users can manage statuses for now or else we can authorized a person having Full Task Access
-
+    permission_classes = [IsAuthenticated, RBACPermission] # Replaced HasFullTaskAccess
+    
+    perms_map = {
+        'create': 'tasks.can_create_status',
+        'update': 'tasks.can_edit_status',
+        'destroy': 'tasks.can_delete_status',
+        'list': 'tasks.can_view_all_tasks', # Or a specific status permission
+        'retrieve': 'tasks.can_view_all_tasks',
+    }
 
 
 class CommentViewSet(viewsets.ModelViewSet):
@@ -775,39 +659,31 @@ class CommentViewSet(viewsets.ModelViewSet):
     Nested under /tasks/{task_pk}/comments/
     """
     serializer_class = CommentSerializer
-    permission_classes = [IsAuthenticated, IsProjectMember, IsAuthorOrReadOnly]
+    permission_classes = [IsAuthenticated, RBACPermission, IsAuthorOrReadOnly]
 
+    perms_map = {
+        'create': 'tasks.can_add_comment',
+        'update': 'tasks.can_add_comment', # Logic handled by IsAuthorOrReadOnly too
+        'partial_update': 'tasks.can_add_comment',
+        'destroy': 'tasks.can_add_comment',
+        'list': 'tasks.can_view_all_tasks',
+        'retrieve': 'tasks.can_view_all_tasks',
+    }
     def get_queryset(self):
-        """
-        Filters the queryset to return only comments belonging to the
-        task specified in the URL (e.g., /tasks/123/comments/).
-        """
         task_pk = self.kwargs['task_pk']
-        # Use Django's ContentType framework to filter comments for the Task model
         task_content_type = ContentType.objects.get_for_model(Task)
         return Comment.objects.filter(content_type=task_content_type, object_id=task_pk)
 
     def perform_create(self, serializer):
-        """
-        Automatically associates the new comment with the correct task,
-        and sets the author to the correct ProjectMember instance.
-        """
         task = get_object_or_404(Task, pk=self.kwargs['task_pk'])
-
         try:
-            # Find the ProjectMember object that links the current user to the task's project.
             project_member_author = ProjectMember.objects.get(
                 user=self.request.user,
                 project=task.project
             )
         except ProjectMember.DoesNotExist:
-            # If no link exists, the user is not a member of this project.
             raise PermissionDenied("You are not a member of this project and cannot comment.")
-
-        # Save the comment, linking it to the ProjectMember and the task.
         serializer.save(author=project_member_author, content_object=task)
-
-
 
 
 
@@ -822,8 +698,17 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     5. Submitting forms (POST /api/projects/{id}/forms/{form_id}/submit/)
     """
     serializer_class = FormTemplateSerializer
-    permission_classes = [IsAuthenticated, IsProjectMember]
+    permission_classes = [IsAuthenticated, RBACPermission]
 
+    perms_map = {
+        'create': 'tasks.can_create_form_template',
+        'update': 'tasks.can_edit_form_template',
+        'partial_update': 'tasks.can_edit_form_template',
+        'destroy': 'tasks.can_delete_form_template',
+        'list': 'tasks.can_view_all_tasks', # Forms are usually visible to team
+        'retrieve': 'tasks.can_view_all_tasks',
+        'submit_form': 'tasks.can_submit_form', # Or can_create_task
+    }
     def get_queryset(self):
         # Filter by project from URL
         if 'project_pk' in self.kwargs:

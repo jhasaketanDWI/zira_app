@@ -15,13 +15,30 @@ from django.db.models import Count
 from user.models import User, Invitation
 from django.core.mail import send_mail
 from django.conf import settings
-from common.permissions import IsOwnerAdminOrManager
+from common.permissions import IsOwnerAdminOrManager,RBACPermission
 from user.serializers import UserSerializer
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by("-id")
     serializer_class = ProjectSerializer
-    permission_classes = [IsAuthenticated] 
+    permission_classes = [IsAuthenticated, RBACPermission]
+    perms_map = {
+        'create': 'project.can_create_project',
+        'update': 'project.can_edit_project_details',
+        'partial_update': 'project.can_edit_project_details',
+        'destroy': 'project.can_delete_project',
+        
+        # List/Retrieve are special: We rely on 'get_queryset' (membership) 
+        # instead of a specific global permission, so we leave them None 
+        # or map to a basic "can_view_project" if you enforced one.
+        'list': None, 
+        'retrieve': None, 
+
+        # Custom Action
+        'available_members': 'project.can_manage_project_members',
+    }
+
 
     def get_serializer_class(self):
         if self.action == 'retrieve':
@@ -100,13 +117,17 @@ class ProjectViewSet(viewsets.ModelViewSet):
         ProjectMember.objects.bulk_create(members_to_create)
 
     def perform_update(self, serializer):
+        # RBAC Check is done. Now check Project Membership specific logic.
         project = self.get_object()
         try:
             member = ProjectMember.objects.get(project=project, user=self.request.user)
-            if member.role not in [ProjectMember.Role.OWNER, ProjectMember.Role.MANAGER ]:
+            # Only Project Owners or Managers can edit details (Business Logic)
+            if member.role not in [ProjectMember.Role.OWNER, ProjectMember.Role.MANAGER]:
                 raise PermissionDenied("You do not have permission to edit project details.")
         except ProjectMember.DoesNotExist:
-            raise PermissionDenied("You are not a member of this project.")
+            # Fallback for Global Admin/Owner who might not be in the member list but has permission
+            if not (self.request.user.is_superuser or getattr(self.request.user, 'role', '') == 'OWNER'):
+                 raise PermissionDenied("You are not a member of this project.")
         serializer.save()
 
     def list(self, request, *args, **kwargs):
@@ -134,21 +155,25 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['get'], url_path='available-members/(?P<role>[a-zA-Z]+)')
     def available_members(self, request, role, pk=None):
         """
-        This is Requirement #2 & #5 (part 1): Find available users with a specific global role.
+        RBAC: project.can_manage_project_members
         """
         project = self.get_object()
         try:
             requester_membership = ProjectMember.objects.get(project=project, user=request.user)
             requester_role = requester_membership.role
         except ProjectMember.DoesNotExist:
-            return Response({"error": "You are not a member of this project."}, status=status.HTTP_403_FORBIDDEN)
+            # Allow global owners to pass if they aren't explicitly members
+            if getattr(request.user, 'role', '') == 'OWNER':
+                requester_role = ProjectMember.Role.OWNER
+            else:
+                return Response({"error": "You are not a member of this project."}, status=status.HTTP_403_FORBIDDEN)
         
         allowed_roles_to_query = []
         if requester_role == ProjectMember.Role.OWNER:
             allowed_roles_to_query = ['manager', 'developer', 'tester','scrum_master']
-        elif requester_role == ProjectMember.Role.MANAGER :
+        elif requester_role == ProjectMember.Role.MANAGER:
             allowed_roles_to_query = ['developer', 'tester']
-        elif requester_role == ProjectMember.Role.SCRUM_MASTER :
+        elif requester_role == ProjectMember.Role.SCRUM_MASTER:
             allowed_roles_to_query = ['developer', 'tester', 'manager']
 
         if role.lower() not in allowed_roles_to_query:
@@ -171,58 +196,66 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
     MODIFIED: This viewset is now nested under /projects/{project_pk}/members/
     """
     serializer_class = ProjectMemberSerializer
-    permission_classes = [IsAuthenticated,IsOwnerAdminOrManager ]
+    permission_classes = [IsAuthenticated, RBACPermission]
+    perms_map = {
+        'create': 'project.can_manage_project_members',
+        'update': 'project.can_manage_project_members',
+        'partial_update': 'project.can_manage_project_members',
+        'destroy': 'project.can_manage_project_members',
+        
+        'list': None, # Visible to project members (filtered in get_queryset)
+        'retrieve': None,
+        
+        # Custom Actions
+        'bulk_assign': 'project.can_manage_project_members',
+        'invite_member': 'project.can_invite_member', # Specific permission for invites
+    }
 
     def get_queryset(self):
-        """
-        This viewset now only returns members for the project specified
-        in the URL, AND filters the list based on the requester's role.
-        """
         project_pk = self.kwargs.get('project_pk')
         user = self.request.user
 
         if not project_pk:
             return ProjectMember.objects.none()
 
+        # Check membership
         try:
             requester_membership = ProjectMember.objects.get(project_id=project_pk, user=user)
             requester_role = requester_membership.role
         except ProjectMember.DoesNotExist:
-            return ProjectMember.objects.none()
+            # Allow Global Owner view access
+            if getattr(user, 'role', '') == 'OWNER':
+                requester_role = ProjectMember.Role.OWNER
+            else:
+                return ProjectMember.objects.none()
 
         base_queryset = ProjectMember.objects.filter(project_id=project_pk)
 
-        # 3. Apply filtering based on the user's role
-        
-        # If the user is a MANAGER, only show Developers and Testers
+        # Filtering logic based on role
         if requester_role == ProjectMember.Role.MANAGER:
             return base_queryset.filter(
                 role__in=[ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]
             ).order_by('-id')
         
-        # For all other roles (OWNER, DEVELOPER, TESTER),
-        # show everyone except themselves.
         return base_queryset.exclude(user=user).order_by('-id')
 
+
     def perform_create(self, serializer):
+        # RBAC Check 'can_manage_project_members' passed.
+        # Now enforcing hierarchical business rules.
         project_pk = self.kwargs.get('project_pk')
-        try:
-            project = Project.objects.get(pk=project_pk)
-        except Project.DoesNotExist:
-            raise PermissionDenied("Project not found.")
+        project = get_object_or_404(Project, pk=project_pk)
 
         role_to_assign = serializer.validated_data["role"]
-
-        # if role_to_assign == ProjectMember.Role.MANAGER :
-        #     if ProjectMember.objects.filter(project=project, role=ProjectMember.Role.MANAGER ).exists():
-        #         raise PermissionDenied("A Project Manager already exists for this project.")
-        
         requester_role = self._get_requester_role(self.request.user, project)
+
+        if not requester_role and getattr(self.request.user, 'role', '') == 'OWNER':
+            requester_role = ProjectMember.Role.OWNER
 
         if requester_role == ProjectMember.Role.OWNER:
             if role_to_assign == ProjectMember.Role.OWNER:
                 raise PermissionDenied("Cannot assign another Owner.")
-        elif requester_role == ProjectMember.Role.MANAGER :
+        elif requester_role == ProjectMember.Role.MANAGER:
             if role_to_assign not in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
                 raise PermissionDenied("Project Managers can only assign Developers or Testers.")
         else:
@@ -232,23 +265,17 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
     
     @action(detail=False, methods=['post'], url_path='bulk-assign/(?P<role>[a-zA-Z_]+)')
     def bulk_assign(self, request, role, project_pk=None):
-        try:
-            project = Project.objects.get(pk=project_pk)
-        except Project.DoesNotExist:
-            return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
-
-        # Convert the role from the URL to uppercase for consistent validation
+        # RBAC: 'project.can_manage_project_members'
+        project = get_object_or_404(Project, pk=project_pk)
         role_to_assign = role.upper()
 
-        # Validate the role against the available choices
         if role_to_assign not in ProjectMember.Role.values:
             return Response({"error": f"'{role}' is not a valid role."}, status=status.HTTP_400_BAD_REQUEST)
         
         requester_role = self._get_requester_role(self.request.user, project)
-        if not requester_role:
-             return Response({"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN)
+        if not requester_role and getattr(request.user, 'role', '') == 'OWNER':
+             requester_role = ProjectMember.Role.OWNER
 
-        # Permission Check
         can_assign = False
         if requester_role == ProjectMember.Role.OWNER and role_to_assign != ProjectMember.Role.OWNER:
             can_assign = True
@@ -268,9 +295,8 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
 
         for user_id in user_ids:
             if ProjectMember.objects.filter(project=project, user_id=user_id).exists():
-                error_responses.append({'user_id': user_id, 'error': "This user is already a member of the project."})
+                error_responses.append({'user_id': user_id, 'error': "This user is already a member."})
                 continue
-
             try:
                 user = User.objects.get(pk=user_id)
                 member = ProjectMember.objects.create(project=project, user=user, role=role_to_assign)
@@ -286,16 +312,14 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='invite-member')
     def invite_member(self, request, project_pk=None):
         """
-        Handles inviting a user (either new or existing) to a project.
-        - If new, creates an inactive user and sends a set-password link.
-        - If existing, sends an accept-invitation link.
+        RBAC: 'project.can_invite_member'
         """
-        try:
-            project = Project.objects.get(pk=project_pk)
-        except Project.DoesNotExist:
-            return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
+        project = get_object_or_404(Project, pk=project_pk)
 
         requester_role = self._get_requester_role(self.request.user, project)
+        if not requester_role and getattr(request.user, 'role', '') == 'OWNER':
+             requester_role = ProjectMember.Role.OWNER
+
         if not requester_role:
              return Response({"error": "You must be a member of this project to invite others."}, status=status.HTTP_403_FORBIDDEN)
 
@@ -304,9 +328,9 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         email_to_invite = serializer.validated_data['email']
         project_role_to_assign = serializer.validated_data['role']
 
-        # 1. Permission Check
+        # Permission Check (Business Logic)
         can_invite = False
-        if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.MANAGER,ProjectMember.Role.SCRUM_MASTER, ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
+        if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.MANAGER, ProjectMember.Role.SCRUM_MASTER, ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
             can_invite = True
         elif requester_role == ProjectMember.Role.MANAGER and project_role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
             can_invite = True
@@ -314,19 +338,16 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         if not can_invite:
             return Response({'error': f"As a {requester_role}, you do not have permission to invite a user with the role {project_role_to_assign}."}, status=status.HTTP_403_FORBIDDEN)
         
-        # 2. Check if already a member or already has a pending invite
         if ProjectMember.objects.filter(project=project, user__email__iexact=email_to_invite).exists():
             return Response({'error': 'This user is already a member of this project.'}, status=status.HTTP_400_BAD_REQUEST)
 
         if ProjectInvitation.objects.filter(project=project, email__iexact=email_to_invite, status=ProjectInvitation.Status.PENDING).exists():
-            return Response({'error': 'An invitation has already been sent to this email address for this project.'}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({'error': 'An invitation has already been sent to this email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        # 3. --- HYBRID LOGIC ---
         existing_user = User.objects.filter(email__iexact=email_to_invite).first()
 
         if existing_user:
-            # --- CASE 1: USER ALREADY EXISTS ---
-            # Your new feature logic
+            # Case 1: Existing User
             invitation = ProjectInvitation.objects.create(
                 project=project,
                 email=email_to_invite,
@@ -334,7 +355,6 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 invited_by=request.user,
                 user_to_invite=existing_user
             )
-            
             accept_link = f"https://kanban.dreamwaveinnovations.com/accept-project-invite?token={invitation.token}"
             subject = f"You are invited to join Project: {project.name}"
             message = (
@@ -342,175 +362,47 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 f"You've been invited to join the project '{project.name}' as a {project_role_to_assign}.\n"
                 f"Please click the link to accept: {accept_link}"
             )
-            
             send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
             
-            return Response({
-                'status': 'Invitation sent successfully. The user is already registered and needs to accept.'
-            }, status=status.HTTP_201_CREATED)
+            return Response({'status': 'Invitation sent to existing user.'}, status=status.HTTP_201_CREATED)
         else:
-            # --- CASE 2: USER IS NEW ---
-            # Your old logic, modified to use the new invitation model
-            
-            # 1. Map ProjectRole to global UserRole
+            # Case 2: New User
             global_role_map = {
                 ProjectMember.Role.MANAGER: User.Role.MANAGER,
                 ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
                 ProjectMember.Role.TESTER: User.Role.TESTER,
+                ProjectMember.Role.SCRUM_MASTER: User.Role.SCRUM_MASTER,
             }
             global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
 
-            # 2. Create the inactive user (as you wanted)
             new_user = User.objects.create_user(
                 email=email_to_invite, 
                 password=None, 
                 role=global_role, 
-                is_active=False # User is inactive
+                is_active=False 
             )
             
-            # 3. Add them to the project (as you wanted)
             ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
 
-            # 4. Create the new invitation record to track the token
             invitation = ProjectInvitation.objects.create(
                 project=project,
                 email=email_to_invite,
                 role=project_role_to_assign,
                 invited_by=request.user,
                 user_to_invite=new_user,
-                status=ProjectInvitation.Status.PENDING # Mark as pending
+                status=ProjectInvitation.Status.PENDING
             )
             
-            # 5. Send the set password link
-            # Point this to your ORIGINAL set-password frontend page
             set_password_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
-            
             subject = f"You are invited to join Project: {project.name}"
             message = (
                 f"Hello,\n\n"
                 f"You've been invited to join the project '{project.name}'.\n"
                 f"Please click the link to set your password and activate your account: {set_password_link}"
             )
-            
             send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
 
-            return Response({
-                'status': 'Invitation sent. A new inactive user has been created and added to the project.'
-            }, status=status.HTTP_201_CREATED)
-
-        # else:
-        #     # --- CASE 2: USER IS NEW ---
-        #     # Your old logic, but modified to use the new invitation model
-            
-        #     # Map ProjectRole to global UserRole
-        #     global_role_map = {
-        #         ProjectMember.Role.MANAGER: User.Role.MANAGER,
-        #         ProjectMember.Role.SCRUM_MASTER : User.Role.SCRUM_MASTER,
-
-        #         ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
-        #         ProjectMember.Role.TESTER: User.Role.TESTER,
-        #     }
-        #     global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
-
-        #     # 1. Create the inactive user (as you wanted)
-        #     new_user = User.objects.create_user(
-        #         email=email_to_invite, 
-        #         password=None, 
-        #         role=global_role, 
-        #         is_active=False # User is inactive
-        #     )
-            
-        #     # 2. Add them to the project (as you wanted)
-        #     ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
-
-        #     # 3. Create the new invitation record to track the token
-        #     invitation = ProjectInvitation.objects.create(
-        #         project=project,
-        #         email=email_to_invite,
-        #         role=project_role_to_assign,
-        #         invited_by=request.user,
-        #         user_to_invite=new_user,
-        #         status=ProjectInvitation.Status.PENDING # Mark as pending
-        #     )
-            
-        #     # 4. Send the set password link
-        #     set_password_link = f"http://localhost:5173/activate-and-set-password?token={invitation.token}"
-        #     subject = f"You are invited to join Project: {project.name}"
-        #     message = (
-        #         f"Hello,\n\n"
-        #         f"You've been invited to join the project '{project.name}'.\n"
-        #         f"Please click the link to set your password and activate your account: {set_password_link}"
-        #     )
-            
-        #     send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
-
-        #     return Response({
-        #         'status': 'Invitation sent. A new inactive user has been created and added to the project.'
-        #     }, status=status.HTTP_201_CREATED)
-    # @action(detail=False, methods=['post'], url_path='invite-member')
-    # def invite_member(self, request, project_pk=None):
-    #     """
-    #     Handles inviting a NEW user and simultaneously adding them to this project.
-    #     Permissions are checked based on the inviter's role within the project.
-    #     """
-    #     try:
-    #         project = Project.objects.get(pk=project_pk)
-    #     except Project.DoesNotExist:
-    #         return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
-
-    #     requester_role = self._get_requester_role(self.request.user, project)
-    #     if not requester_role:
-    #          return Response({"error": "You must be a member of this project to invite others."}, status=status.HTTP_403_FORBIDDEN)
-
-    #     serializer = ProjectMemberInviteSerializer(data=request.data)
-    #     serializer.is_valid(raise_exception=True)
-    #     email_to_invite = serializer.validated_data['email']
-    #     project_role_to_assign = serializer.validated_data['role']
-
-    #     # Permission Check
-    #     can_invite = False
-    #     if requester_role == ProjectMember.Role.OWNER and project_role_to_assign in [ProjectMember.Role.MANAGER , ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
-    #         can_invite = True
-    #     elif requester_role == ProjectMember.Role.MANAGER and project_role_to_assign in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
-    #         can_invite = True
-        
-    #     if not can_invite:
-    #         return Response({'error': f"As a {requester_role}, you do not have permission to invite a user with the role {project_role_to_assign}."}, status=status.HTTP_403_FORBIDDEN)
-        
-    #     if User.objects.filter(email__iexact=email_to_invite).exists():
-    #         return Response({'error': 'A user with this email already exists. Please add them as a member directly.'}, status=status.HTTP_400_BAD_REQUEST)
-    #     if Invitation.objects.filter(email__iexact=email_to_invite).exists():
-    #         return Response({'error': 'An invitation for this email has already been sent.'}, status=status.HTTP_400_BAD_REQUEST)
-
-    #     global_role_map = {
-    #         ProjectMember.Role.MANAGER : User.Role.MANAGER,
-    #         ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
-    #         ProjectMember.Role.TESTER: User.Role.TESTER,
-    #     }
-    #     global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
-
-    #     invitation = Invitation.objects.create(
-    #         email=email_to_invite, 
-    #         role=global_role,
-    #         invited_by=request.user
-    #     )
-    #     new_user = User.objects.create_user(
-    #         email=invitation.email, password=None, role=invitation.role, is_active=False
-    #     )
-    #     ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
-
-    #     invitation_link = f"http://localhost:5173/set-password?token={invitation.token}"
-    #     send_mail(
-    #         subject=f'You are invited to join Project: {project.name}!',
-    #         message=f"Hello, please click the link to set your password and join the project: {invitation_link}",
-    #         from_email=settings.DEFAULT_FROM_EMAIL,
-    #         recipient_list=[invitation.email],
-    #     )
-        
-    #     return Response({
-    #         'status': 'Invitation sent successfully. The user has been added to the project pending activation.'
-    #     }, status=status.HTTP_201_CREATED)
-    
+            return Response({'status': 'Invitation sent. New user created and added to project.'}, status=status.HTTP_201_CREATED)
     
     def _get_requester_role(self, user, project):
         try:
@@ -520,21 +412,24 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             return None
 
     def perform_update(self, serializer):
+        # RBAC: 'project.can_manage_project_members' check passed
         project = serializer.instance.project
         new_role = serializer.validated_data.get("role")
 
-        if new_role and new_role == ProjectMember.Role.MANAGER :
-            if ProjectMember.objects.filter(project=project, role=ProjectMember.Role.MANAGER ).exclude(pk=serializer.instance.pk).exists():
+        if new_role and new_role == ProjectMember.Role.MANAGER:
+            if ProjectMember.objects.filter(project=project, role=ProjectMember.Role.MANAGER).exclude(pk=serializer.instance.pk).exists():
                 raise PermissionDenied("A Project Manager already exists for this project.")
 
         requester_role = self._get_requester_role(self.request.user, project)
-        
+        if not requester_role and getattr(self.request.user, 'role', '') == 'OWNER':
+            requester_role = ProjectMember.Role.OWNER
+
         if new_role == ProjectMember.Role.OWNER:
             raise PermissionDenied("Cannot promote any member to Owner.")
 
         if requester_role == ProjectMember.Role.OWNER:
             pass 
-        elif requester_role == ProjectMember.Role.MANAGER :
+        elif requester_role == ProjectMember.Role.MANAGER:
             original_role = serializer.instance.role
             if original_role not in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
                 raise PermissionDenied("Project Managers can only manage Developers and Testers.")
@@ -546,109 +441,72 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         serializer.save()
 
     def perform_destroy(self, instance):
+        # RBAC: 'project.can_manage_project_members' check passed
         project = instance.project
         role_to_delete = instance.role
         requester_role = self._get_requester_role(self.request.user, project)
+        
+        if not requester_role and getattr(self.request.user, 'role', '') == 'OWNER':
+            requester_role = ProjectMember.Role.OWNER
+
         if requester_role == ProjectMember.Role.OWNER:
             if instance.user == self.request.user:
                 raise PermissionDenied("Owners cannot remove themselves from a project.")
-        elif requester_role == ProjectMember.Role.MANAGER :
+        elif requester_role == ProjectMember.Role.MANAGER:
             if role_to_delete not in [ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]:
                 raise PermissionDenied("Project Managers can only remove Developers or Testers.")
         else:
             raise PermissionDenied("You do not have permission to remove members from this project.")
         instance.delete()
-# class ManagedTeamMembersView(APIView):
-#     """
-#     An endpoint for a Project Manager to see a unique list of all users
-#     who are members of the projects they manage.
-#     """
-#     permission_classes = [IsAuthenticated]
-
-#     def get(self, request, *args, **kwargs):
-#         current_user = request.user
-
-#         # 1. Find the IDs of all projects where the current user is a Project Manager.
-#         managed_project_ids = ProjectMember.objects.filter(
-#             user=current_user,
-#             role=ProjectMember.Role.MANAGER 
-#         ).values_list('project_id', flat=True)
-
-#         if not managed_project_ids.exists():
-#             # If the user manages no projects, return an empty list.
-#             return Response([])
-
-#         # 2. Find the unique IDs of all users who are members of those projects,
-#         #    excluding the manager themselves.
-#         team_member_ids = ProjectMember.objects.filter(
-#             project_id__in=managed_project_ids
-#         ).exclude(
-#             user=current_user
-#         ).values_list('user_id', flat=True).distinct()
-
-#         # 3. Fetch the full User objects for those IDs.
-#         team_members = User.objects.filter(id__in=team_member_ids)
-
-#         # 4. Serialize the user data and return it as the response.
-#         serializer = UserSerializer(team_members, many=True)
-#         return Response(serializer.data)
-
 class ManagedTeamMembersView(APIView):
     """
     An endpoint for a Project Manager to see a unique list of all users
     who are members of the projects they manage.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsAuthenticated, RBACPermission]
+    perms_map = {
+        'retrieve': 'project.can_manage_project_members'
+    }
 
     def get(self, request, *args, **kwargs):
+        # Your existing logic
         current_user = request.user
-
-        # 1. Find the IDs of all projects where the current user is a Project Manager.
         managed_project_ids = ProjectMember.objects.filter(
             user=current_user,
             role=ProjectMember.Role.MANAGER 
         ).values_list('project_id', flat=True)
 
         if not managed_project_ids.exists():
-            # If the user manages no projects, return an empty list.
             return Response([])
 
-        # 2. Find the unique IDs of all users who are members of those projects,
-        #    excluding the manager themselves.
         team_member_ids = ProjectMember.objects.filter(
             project_id__in=managed_project_ids,
             role__in=[ProjectMember.Role.DEVELOPER, ProjectMember.Role.TESTER]
         ).values_list('user_id', flat=True).distinct()
 
-        # 3. Fetch the full User objects for those IDs.
-        team_members = User.objects.filter(
-            id__in=team_member_ids
-        )
-        # 4. Serialize the user data and return it as the response.
+        team_members = User.objects.filter(id__in=team_member_ids)
         serializer = UserSerializer(team_members, many=True)
         return Response(serializer.data)
 
-
 class ProjectSummaryView(APIView):
-    permission_classes = [IsAuthenticated]
-
+    permission_classes = [IsAuthenticated, RBACPermission]
+    perms_map = {
+        'retrieve': 'project.can_view_project_settings' # Or can_view_project
+    }
     def get(self, request, project_id, format=None):
-        # Ensure the user is a member of the project they are requesting
+        # Keep existing Membership Check
         if not ProjectMember.objects.filter(project_id=project_id, user=request.user).exists():
-            return Response({"error": "You do not have permission to view this project."}, status=status.HTTP_403_FORBIDDEN)
+             # Fallback for Global Owner
+             if not (request.user.is_superuser or getattr(request.user, 'role', '') == 'OWNER'):
+                return Response({"error": "You do not have permission to view this project."}, status=status.HTTP_403_FORBIDDEN)
 
-        # 1. Date range calculations
         today = timezone.now()
         seven_days_ago = today - timedelta(days=7)
-
-        # Base queryset for tasks in the current project
         project_tasks = Task.objects.filter(project_id=project_id)
 
-        # 2. Summary Card Logic
-        # For 'completed', we assume a status named 'Done'. Adjust if yours is different.
         completed_tasks_last_7_days = project_tasks.filter(
             status__title__iexact='Done', 
-            updated_at__gte=seven_days_ago # Using updated_at as a proxy for completed_at
+            updated_at__gte=seven_days_ago
         ).count()
 
         summary_cards = {
@@ -658,13 +516,9 @@ class ProjectSummaryView(APIView):
             'due_soon': project_tasks.filter(due_date__range=[today, today + timedelta(days=3)]).exclude(status__title__iexact='Done').count()
         }
 
-        # 3. Status Overview Logic
         status_overview = project_tasks.values('status__title').annotate(count=Count('id')).order_by('status__title')
+        recent_activities = ActivityLog.objects.filter(project_id=project_id)[:10]
 
-        # 4. Recent Activity Logic
-        recent_activities = ActivityLog.objects.filter(project_id=project_id)[:10] # Get last 10 activities
-
-        # 5. Assemble the final response
         response_data = {
             "summary_cards": summary_cards,
             "status_overview": {
@@ -673,9 +527,7 @@ class ProjectSummaryView(APIView):
             },
             "recent_activity": ActivityLogSerializer(recent_activities, many=True).data
         }
-
         return Response(response_data)
-
 
 class AcceptProjectInvitationView(APIView):
     """
