@@ -63,12 +63,12 @@ class EpicViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_epic',
-        'list': 'tasks.can_view_all_tasks', # Or create specific 'can_view_epics'
-        'retrieve': 'tasks.can_view_all_tasks',
-        'update': 'tasks.can_edit_epic',
-        'partial_update': 'tasks.can_edit_epic',
-        'destroy': 'tasks.can_delete_epic',
+        'create': 'task.can_create_epic',
+        'list': 'task.can_view_all_tasks', # Or create specific 'can_view_epics'
+        'retrieve': 'task.can_view_all_tasks',
+        'update': 'task.can_edit_epic',
+        'partial_update': 'task.can_edit_epic',
+        'destroy': 'task.can_delete_epic',
     }
     
 
@@ -97,19 +97,20 @@ class SprintViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_sprint',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
-        'update': 'tasks.can_edit_sprint',
-        'partial_update': 'tasks.can_edit_sprint',
-        'destroy': 'tasks.can_delete_sprint', # Make sure to add this to models.py if missing
+        'create': 'task.can_create_sprint',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
+        'update': 'task.can_edit_sprint',
+        'partial_update': 'task.can_edit_sprint',
+        'destroy': 'task.can_delete_sprint', # Make sure to add this to models.py if missing
 
         # Custom Actions
-        'activate': 'tasks.can_start_sprint',
-        'end': 'tasks.can_end_sprint',
-        'check_active_sprint': 'tasks.can_view_all_tasks',
-        'dashboard': 'tasks.can_view_all_tasks',
-        'tickets': 'tasks.can_view_all_tasks',
+        'activate': 'task.can_start_sprint',
+        'end': 'task.can_end_sprint',
+        'check_active_sprint': 'task.can_view_all_tasks',
+        'dashboard': 'task.can_view_all_tasks',
+        'tickets': 'task.can_view_all_tasks',
+        
     }
     def get_queryset(self):
         user = self.request.user
@@ -220,11 +221,11 @@ class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
     perms_map = {
-        'create': 'tasks.can_create_task', # Tickets are small tasks
-        'update': 'tasks.can_edit_tasks',
-        'destroy': 'tasks.can_delete_task',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_create_task', # Tickets are small tasks
+        'update': 'task.can_edit_tasks',
+        'destroy': 'task.can_delete_task',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
     }
 
 
@@ -251,12 +252,12 @@ class TagViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_tag',
-        'update': 'tasks.can_manage_tags',
-        'partial_update': 'tasks.can_manage_tags',
-        'destroy': 'tasks.can_delete_tag',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_create_tag',
+        'update': 'task.can_manage_tags',
+        'partial_update': 'task.can_manage_tags',
+        'destroy': 'task.can_delete_tag',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
     }
 
     def perform_create(self, serializer):
@@ -286,13 +287,13 @@ class GoalViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_goal',
-        'update': 'tasks.can_edit_goal',
-        'partial_update': 'tasks.can_edit_goal',
-        'destroy': 'tasks.can_delete_goal',
-        'list': 'tasks.can_view_goals',
-        'retrieve': 'tasks.can_view_goals',
-        'my_goals': 'tasks.can_view_goals',
+        'create': 'task.can_create_goal',
+        'update': 'task.can_edit_goal',
+        'partial_update': 'task.can_edit_goal',
+        'destroy': 'task.can_delete_goal',
+        'list': 'task.can_view_goals',
+        'retrieve': 'task.can_view_goals',
+        'my_goals': 'task.can_view_goals',
         'off_track_goals': 'tasks.can_view_goals',
     }    
     
@@ -398,28 +399,28 @@ class TaskViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_task',
-        'list': 'tasks.can_view_all_tasks', # The queryset handles "view own" fallback
-        'retrieve': 'tasks.can_view_all_tasks',
-        'update': 'tasks.can_edit_tasks',
-        'partial_update': 'tasks.can_edit_tasks',
-        'destroy': 'tasks.can_delete_task',
+        'create': 'task.can_create_task',
+        'list': 'task.can_view_all_tasks', # The queryset handles "view own" fallback
+        'retrieve': 'task.can_view_all_tasks',
+        'update': 'task.can_edit_tasks',
+        'partial_update': 'task.can_edit_tasks',
+        'destroy': 'task.can_delete_task',
 
         # Custom Actions
-        'create_status': 'tasks.can_create_status', # Admin only usually
-        'update_task_status': 'tasks.can_change_status',
-        'update_status': 'tasks.can_change_status',
-        'update_assignees': 'tasks.can_assign_task',
-        'update_description': 'tasks.can_edit_tasks',
-        'update_priority': 'tasks.can_change_priority',
-        'update_due_date': 'tasks.can_set_due_date',
-        'update_story_points': 'tasks.can_edit_story_points',
-        'set_parent_task': 'tasks.can_link_tasks', # or edit_tasks
-        'add_activity': 'tasks.can_add_comment',
-        'update_activity': 'tasks.can_add_comment',
-        'delete_activity': 'tasks.can_add_comment',
-        'sprint': 'tasks.can_move_to_backlog', # Moving task to sprint/backlog
-        'by_status': 'tasks.can_view_all_tasks',
+        'create_status': 'task.can_create_status', # Admin only usually
+        'update_task_status': 'task.can_change_status',
+        'update_status': 'task.can_change_status',
+        'update_assignees': 'task.can_assign_task',
+        'update_description': 'task.can_edit_tasks',
+        'update_priority': 'task.can_change_priority',
+        'update_due_date': 'task.can_set_due_date',
+        'update_story_points': 'task.can_edit_story_points',
+        'set_parent_task': 'task.can_link_tasks', # or edit_tasks
+        'add_activity': 'task.can_add_comment',
+        'update_activity': 'task.can_add_comment',
+        'delete_activity': 'task.can_add_comment',
+        'sprint': 'task.can_move_to_backlog', # Moving task to sprint/backlog
+        'by_status': 'task.can_view_all_tasks',
     }
     def get_queryset(self):
         user = self.request.user
@@ -645,11 +646,11 @@ class StatusViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission] # Replaced HasFullTaskAccess
     
     perms_map = {
-        'create': 'tasks.can_create_status',
-        'update': 'tasks.can_edit_status',
-        'destroy': 'tasks.can_delete_status',
-        'list': 'tasks.can_view_all_tasks', # Or a specific status permission
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_create_status',
+        'update': 'task.can_edit_status',
+        'destroy': 'task.can_delete_status',
+        'list': 'task.can_view_all_tasks', # Or a specific status permission
+        'retrieve': 'task.can_view_all_tasks',
     }
 
 
@@ -662,12 +663,12 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission, IsAuthorOrReadOnly]
 
     perms_map = {
-        'create': 'tasks.can_add_comment',
-        'update': 'tasks.can_add_comment', # Logic handled by IsAuthorOrReadOnly too
-        'partial_update': 'tasks.can_add_comment',
-        'destroy': 'tasks.can_add_comment',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_add_comment',
+        'update': 'task.can_add_comment', # Logic handled by IsAuthorOrReadOnly too
+        'partial_update': 'task.can_add_comment',
+        'destroy': 'task.can_add_comment',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
     }
     def get_queryset(self):
         task_pk = self.kwargs['task_pk']
@@ -701,13 +702,13 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_form_template',
-        'update': 'tasks.can_edit_form_template',
-        'partial_update': 'tasks.can_edit_form_template',
-        'destroy': 'tasks.can_delete_form_template',
-        'list': 'tasks.can_view_all_tasks', # Forms are usually visible to team
-        'retrieve': 'tasks.can_view_all_tasks',
-        'submit_form': 'tasks.can_submit_form', # Or can_create_task
+        'create': 'task.can_create_form_template',
+        'update': 'task.can_edit_form_template',
+        'partial_update': 'task.can_edit_form_template',
+        'destroy': 'task.can_delete_form_template',
+        'list': 'task.can_view_all_tasks', # Forms are usually visible to team
+        'retrieve': 'task.can_view_all_tasks',
+        'submit_form': 'task.can_submit_form', # Or can_create_task
     }
     def get_queryset(self):
         # Filter by project from URL
