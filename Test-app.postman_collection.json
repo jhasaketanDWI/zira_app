@@ -454,7 +454,7 @@
 								"header": [],
 								"body": {
 									"mode": "raw",
-									"raw": "{\r\n        \"email\":\"scrum@example.com\",\r\n        \"password\":\"Password@123\"\r\n}\r\n\r\n",
+									"raw": "{\r\n        \"email\":\"scrum@gmail.com\",\r\n        \"password\":\"Password@123\"\r\n}\r\n\r\n",
 									"options": {
 										"raw": {
 											"language": "json"
@@ -4216,16 +4216,101 @@
 			"item": [
 				{
 					"name": "get all permissions",
-					"protocolProfileBehavior": {
-						"disableBodyPruning": true
-					},
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"// Visualization Script",
+									"// Visualization Script",
+									"const template = `",
+									"<style>",
+									"    table {",
+									"        width: 100%;",
+									"        border-collapse: collapse;",
+									"        font-family: Arial, sans-serif;",
+									"        font-size: 14px;",
+									"    }",
+									"    th {",
+									"        background-color: #4a90d9;",
+									"        color: white;",
+									"        padding: 12px 8px;",
+									"        text-align: left;",
+									"        border: 1px solid #ddd;",
+									"    }",
+									"    td {",
+									"        padding: 10px 8px;",
+									"        border: 1px solid #ddd;",
+									"    }",
+									"    tr:nth-child(even) {",
+									"        background-color: #f9f9f9;",
+									"    }",
+									"    tr:hover {",
+									"        background-color: #f1f1f1;",
+									"    }",
+									"</style>",
+									"<table>",
+									"    <thead>",
+									"        <tr>",
+									"            {{#each headers}}",
+									"            <th>{{this}}</th>",
+									"            {{/each}}",
+									"        </tr>",
+									"    </thead>",
+									"    <tbody>",
+									"        {{#each rows}}",
+									"        <tr>",
+									"            {{#each this}}",
+									"            <td>{{this}}</td>",
+									"            {{/each}}",
+									"        </tr>",
+									"        {{/each}}",
+									"    </tbody>",
+									"</table>",
+									"`;",
+									"",
+									"function createPayload() {",
+									"    const response = pm.response.json();",
+									"    ",
+									"    if (!Array.isArray(response) || response.length === 0) {",
+									"        return { headers: [], rows: [] };",
+									"    }",
+									"    ",
+									"    // Get all unique keys from all objects",
+									"    const allKeys = new Set();",
+									"    response.forEach(item => {",
+									"        Object.keys(item).forEach(key => allKeys.add(key));",
+									"    });",
+									"    const headers = Array.from(allKeys);",
+									"    ",
+									"    // Build rows with values for each header",
+									"    const rows = response.map(item => {",
+									"        return headers.map(header => {",
+									"            const value = item[header];",
+									"            if (value === null || value === undefined) {",
+									"                return '';",
+									"            }",
+									"            if (typeof value === 'object') {",
+									"                return JSON.stringify(value);",
+									"            }",
+									"            return String(value);",
+									"        });",
+									"    });",
+									"    ",
+									"    return { headers, rows };",
+									"}",
+									"",
+									"pm.visualizer.set(template, createPayload());"
+								],
+								"type": "text/javascript",
+								"packages": {},
+								"requests": {}
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Sprint -3\",\n    \"goal\": \"Complete core l features.\",\n    \"project\": 1,\n    \"start_date\": \"2025-10-01\",\n    \"end_date\": \"2025-12-31\"\n    // \"epic\":1\n}"
-						},
 						"url": {
 							"raw": "{{baseUrl}}/permissions/",
 							"host": [
@@ -4246,7 +4331,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}",
+							"raw": "{\n    \"name\": \"SCRUM_MASTER\",\n    \"permission_ids\": [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]         \n    \n     }",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -4269,11 +4354,11 @@
 				{
 					"name": "update role",
 					"request": {
-						"method": "PUT",
+						"method": "PATCH",
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [100,65 ,312,9] \n}",
+							"raw": "{\n    \"name\": \"SCRUM_MASTER\"\n    // \"permission_ids\": []\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -4323,7 +4408,12 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}"
+							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}",
+							"options": {
+								"raw": {
+									"language": "text"
+								}
+							}
 						},
 						"url": {
 							"raw": "{{baseUrl}}/roles/",
@@ -4333,6 +4423,38 @@
 							"path": [
 								"roles",
 								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get a role by name",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}"
+						},
+						"url": {
+							"raw": "{{baseUrl}}/roles/by-name/?name=SCRUM_MASTER",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"roles",
+								"by-name",
+								""
+							],
+							"query": [
+								{
+									"key": "name",
+									"value": "SCRUM_MASTER"
+								}
 							]
 						}
 					},
@@ -4356,6 +4478,7 @@
 			"listen": "prerequest",
 			"script": {
 				"type": "text/javascript",
+				"requests": {},
 				"exec": [
 					""
 				]
@@ -4365,6 +4488,7 @@
 			"listen": "test",
 			"script": {
 				"type": "text/javascript",
+				"requests": {},
 				"exec": [
 					""
 				]
@@ -4378,61 +4502,58 @@
 		},
 		{
 			"key": "accessToken",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "task_pk",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "comment_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "owner_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "team_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "form_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "project_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "task_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "sprint_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "goal_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "invitation_id",
-			"value": "",
-			"type": "default"
+			"value": ""
 		},
 		{
 			"key": "role_id",
+			"value": ""
+		},
+		{
+			"key": "sds",
+			"value": ""
+		},
+		{
+			"key": "role_name",
 			"value": "",
 			"type": "default"
 		}

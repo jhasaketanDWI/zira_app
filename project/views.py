@@ -321,7 +321,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
              requester_role = ProjectMember.Role.OWNER
 
         if not requester_role:
-             return Response({"error": "You must be a member of this project to invite others."}, status=status.HTTP_403_FORBIDDEN)
+             return Response({"error": "You don't have permission to invite others to this project."}, status=status.HTTP_403_FORBIDDEN)
 
         serializer = ProjectMemberInviteSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)

@@ -59,6 +59,7 @@ class User(AbstractUser, AuditBaseModel, SoftDeleteModel):
             ("can_reset_passwords", "User can force a password reset for other users"),
             ("can_delete_users", "User can delete users"),
             ("can_edit_users_info", "User can edit other users' information"),
+            ("can_invite_users", "User can invite new users via email"),
         ]
 
     class Role(models.TextChoices):
