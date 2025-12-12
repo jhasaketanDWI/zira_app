@@ -24,6 +24,7 @@ from .serializers import(
      )
 from project.models import Project, ProjectMember
 from django.contrib.auth.models import Permission, Group
+from django.shortcuts import get_object_or_404
 
 
 
@@ -296,6 +297,7 @@ class GoogleLogin(SocialLoginView):
     adapter_class = GoogleOAuth2Adapter
     client_class = OAuth2Client
     callback_url = "http://localhost:5173"  
+    # callaback_url = "https://kanban.dreamwaveinnovations.com"
 
     def post(self, request, *args, **kwargs):
         response = super().post(request, *args, **kwargs)
@@ -327,7 +329,11 @@ class InviteUserView(generics.CreateAPIView):
     POST /api/users/invite/
     """
     serializer_class = InvitationSerializer
-    permission_classes = [IsOwnerAdminOrScrumMaster,IsOwnerAdminOrManager] 
+    permission_classes = [IsAuthenticated, IsOwnerOrAdmin, RBACPermission   ]
+    perms_map = {
+        'create': 'user.can_invite_users',
+
+    } 
 
     def perform_create(self, serializer):
         invitation = serializer.save(invited_by=self.request.user)
@@ -473,11 +479,34 @@ class PermissionViewSet(viewsets.ReadOnlyModelViewSet):
     """
     serializer_class = PermissionSerializer
     permission_classes = [IsOwnerOrAdmin,IsAuthenticated]
-    # Exclude internal Django permissions to keep the list clean
-    queryset = Permission.objects.exclude(
-        content_type__app_label__in=['admin', 'contenttypes', 'sessions', 'authtoken']
-    ).distinct().order_by('id')
-    # ).order_by('content_type__app_label', 'codename')
+    def get_queryset(self):
+        MY_APPS = [
+            'project', 
+            'task', 
+            'user', 
+            'team',      
+            'billing', 
+            'pages',      
+            'testCase', 
+        ]
+
+        queryset = Permission.objects.filter(content_type__app_label__in=MY_APPS)
+
+        # 2. (Optional) Hide the default Django add/change/delete permissions
+        #    If you want to rely ONLY on your custom "can_create_project" and 
+        #    hide the auto-generated "add_project", uncomment these lines:
+        
+        queryset = queryset.exclude(codename__startswith='add_') \
+                           .exclude(codename__startswith='change_') \
+                           .exclude(codename__startswith='delete_') \
+                           .exclude(codename__startswith='view_')
+
+        return queryset.order_by('id')
+    # # Exclude internal Django permissions to keep the list clean
+    # queryset = Permission.objects.exclude(
+    #     content_type__app_label__in=['admin', 'contenttypes', 'sessions', 'authtoken']
+    # ).distinct().order_by('id')
+    # # ).order_by('content_type__app_label', 'codename')
     
 
 class RoleViewSet(viewsets.ModelViewSet):
@@ -507,6 +536,27 @@ class RoleViewSet(viewsets.ModelViewSet):
         if self.action == 'invitable':
             return [IsAuthenticated()]
         return [IsAdminUser() or IsOwnerOrAdmin()]
+    
+    @action(detail=False, methods=['get'], url_path='by-name')
+    def get_by_name(self, request):
+        """
+        GET /api/rbac/roles/by-name/?name=Manager
+        Fetches a specific role and its permissions using the role name.
+        """
+        role_name = request.query_params.get('name')
+        
+        if not role_name:
+            return Response(
+                {"error": "The 'name' query parameter is required."}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        # Case-sensitive exact match. Use name__iexact for case-insensitive.
+        role = get_object_or_404(Group, name=role_name)
+        
+        # This uses your existing RoleSerializer, which already includes permissions
+        serializer = self.get_serializer(role)
+        return Response(serializer.data)
 
     @action(detail=False, methods=['get'], url_path='available-roles')
     def invitable(self, request):
