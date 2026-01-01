@@ -19,6 +19,7 @@ from common.permissions import IsOwnerAdminOrManager,RBACPermission
 from user.serializers import UserSerializer
 from django.db import transaction
 from django.shortcuts import get_object_or_404
+from common.utils.email_service import send_notification_email, get_stakeholders_emails, get_all_project_members_emails
 class ProjectViewSet(viewsets.ModelViewSet):
     queryset = Project.objects.all().order_by("-id")
     serializer_class = ProjectSerializer
@@ -49,6 +50,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return Project.objects.filter(
             Q(owner=user) | Q(projectmember__user=user)
         ).distinct() .order_by("-id")
+    
     @transaction.atomic
     def perform_create(self, serializer):
         manager_to_assign = serializer.validated_data.get('MANAGER ')
@@ -115,6 +117,25 @@ class ProjectViewSet(viewsets.ModelViewSet):
             
         # 5. Create all ProjectMember entries in bulk
         ProjectMember.objects.bulk_create(members_to_create)
+
+        # --- [EMAIL INTEGRATION] New Project Created ---
+        # Notify ALL users in the system that a new project exists 
+        all_users = User.objects.values_list('email', flat=True)
+        send_notification_email(
+            subject=f"[New Project] {project.name} launched",
+            recipients=list(all_users),
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Project Created",
+                'message_body': f"A new project '{project.name}' has been created by {creator.get_full_name()}.",
+                'details': {
+                    'Project Name': project.name,
+                    'Key': project.key,
+                    'Owner': creator.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}"
+            }
+        )
 
     def perform_update(self, serializer):
         # RBAC Check is done. Now check Project Membership specific logic.
@@ -261,8 +282,27 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         else:
             raise PermissionDenied("You do not have permission to add members to this project.")
 
-        serializer.save(project=project)
-    
+        member = serializer.save(project=project)
+
+        # --- [EMAIL INTEGRATION] New Member Added ---
+        # Notify existing project members
+        recipients = get_all_project_members_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] Welcome {member.user.get_full_name()}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Team Member Added",
+                'message_body': f"{member.user.get_full_name()} has joined the project team.",
+                'details': {
+                    'New Member': member.user.get_full_name(),
+                    'Role': member.role,
+                    'Project': project.name,
+                    'Added By': self.request.user.get_full_name()
+                }
+            }
+        )    
+
     @action(detail=False, methods=['post'], url_path='bulk-assign/(?P<role>[a-zA-Z_]+)')
     def bulk_assign(self, request, role, project_pk=None):
         # RBAC: 'project.can_manage_project_members'
@@ -292,6 +332,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         user_ids = serializer.validated_data['user_ids']
         success_responses = []
         error_responses = []
+        new_members = []
 
         for user_id in user_ids:
             if ProjectMember.objects.filter(project=project, user_id=user_id).exists():
@@ -301,9 +342,26 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 user = User.objects.get(pk=user_id)
                 member = ProjectMember.objects.create(project=project, user=user, role=role_to_assign)
                 success_responses.append(ProjectMemberSerializer(member).data)
+                new_members.append(user.get_full_name())
             except User.DoesNotExist:
                 error_responses.append({'user_id': user_id, 'error': "User not found."})
-
+        # --- [EMAIL INTEGRATION] Bulk Add Notification ---
+        if new_members:
+            recipients = get_all_project_members_emails(project)
+            send_notification_email(
+                subject=f"[{project.name}] {len(new_members)} New Members Added",
+                recipients=recipients,
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Team Members Added",
+                    'message_body': f"The following users have been added to the project as {role_to_assign}s:",
+                    'details': {
+                        'Project': project.name,
+                        'New Members': ", ".join(new_members),
+                        'Added By': request.user.get_full_name()
+                    }
+                }
+            )
         return Response({
             "assigned_members": success_responses,
             "failed_assignments": error_responses
@@ -345,7 +403,6 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             return Response({'error': 'An invitation has already been sent to this email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
         existing_user = User.objects.filter(email__iexact=email_to_invite).first()
-
         if existing_user:
             # Case 1: Existing User
             invitation = ProjectInvitation.objects.create(
@@ -356,14 +413,22 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 user_to_invite=existing_user
             )
             accept_link = f"https://kanban.dreamwaveinnovations.com/accept-project-invite?token={invitation.token}"
-            subject = f"You are invited to join Project: {project.name}"
-            message = (
-                f"Hello {existing_user.first_name or existing_user.email},\n\n"
-                f"You've been invited to join the project '{project.name}' as a {project_role_to_assign}.\n"
-                f"Please click the link to accept: {accept_link}"
-            )
-            send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
             
+            send_notification_email(
+                subject=f"Invitation to join project: {project.name}",
+                recipients=[email_to_invite],
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "You have been invited!",
+                    'message_body': f"Hello {existing_user.first_name}, you have been invited to join the project '{project.name}'.",
+                    'details': {
+                        'Project': project.name,
+                        'Role': project_role_to_assign,
+                        'Invited By': request.user.get_full_name()
+                    },
+                    'action_url': accept_link
+                }
+            )
             return Response({'status': 'Invitation sent to existing user.'}, status=status.HTTP_201_CREATED)
         else:
             # Case 2: New User
@@ -382,6 +447,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 is_active=False 
             )
             
+            # NOTE: We create the member entry immediately for new users in your logic
             ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
 
             invitation = ProjectInvitation.objects.create(
@@ -394,15 +460,81 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             )
             
             set_password_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
-            subject = f"You are invited to join Project: {project.name}"
-            message = (
-                f"Hello,\n\n"
-                f"You've been invited to join the project '{project.name}'.\n"
-                f"Please click the link to set your password and activate your account: {set_password_link}"
+            
+            send_notification_email(
+                subject=f"Welcome! Invitation to join project: {project.name}",
+                recipients=[email_to_invite],
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Welcome to the Team",
+                    'message_body': f"You have been invited to join '{project.name}'. Please activate your account.",
+                    'details': {
+                        'Project': project.name,
+                        'Role': project_role_to_assign,
+                        'Invited By': request.user.get_full_name()
+                    },
+                    'action_url': set_password_link
+                }
             )
-            send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
-
             return Response({'status': 'Invitation sent. New user created and added to project.'}, status=status.HTTP_201_CREATED)
+    
+        # if existing_user:
+        #     # Case 1: Existing User
+        #     invitation = ProjectInvitation.objects.create(
+        #         project=project,
+        #         email=email_to_invite,
+        #         role=project_role_to_assign,
+        #         invited_by=request.user,
+        #         user_to_invite=existing_user
+        #     )
+        #     accept_link = f"https://kanban.dreamwaveinnovations.com/accept-project-invite?token={invitation.token}"
+        #     subject = f"You are invited to join Project: {project.name}"
+        #     message = (
+        #         f"Hello {existing_user.first_name or existing_user.email},\n\n"
+        #         f"You've been invited to join the project '{project.name}' as a {project_role_to_assign}.\n"
+        #         f"Please click the link to accept: {accept_link}"
+        #     )
+        #     send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
+            
+        #     return Response({'status': 'Invitation sent to existing user.'}, status=status.HTTP_201_CREATED)
+        # else:
+        #     # Case 2: New User
+        #     global_role_map = {
+        #         ProjectMember.Role.MANAGER: User.Role.MANAGER,
+        #         ProjectMember.Role.DEVELOPER: User.Role.DEVELOPER,
+        #         ProjectMember.Role.TESTER: User.Role.TESTER,
+        #         ProjectMember.Role.SCRUM_MASTER: User.Role.SCRUM_MASTER,
+        #     }
+        #     global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
+
+        #     new_user = User.objects.create_user(
+        #         email=email_to_invite, 
+        #         password=None, 
+        #         role=global_role, 
+        #         is_active=False 
+        #     )
+            
+        #     ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
+
+        #     invitation = ProjectInvitation.objects.create(
+        #         project=project,
+        #         email=email_to_invite,
+        #         role=project_role_to_assign,
+        #         invited_by=request.user,
+        #         user_to_invite=new_user,
+        #         status=ProjectInvitation.Status.PENDING
+        #     )
+            
+        #     set_password_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
+        #     subject = f"You are invited to join Project: {project.name}"
+        #     message = (
+        #         f"Hello,\n\n"
+        #         f"You've been invited to join the project '{project.name}'.\n"
+        #         f"Please click the link to set your password and activate your account: {set_password_link}"
+        #     )
+        #     send_mail(subject=subject, message=message, from_email=settings.DEFAULT_FROM_EMAIL, recipient_list=[email_to_invite])
+
+        #     return Response({'status': 'Invitation sent. New user created and added to project.'}, status=status.HTTP_201_CREATED)
     
     def _get_requester_role(self, user, project):
         try:
@@ -444,6 +576,8 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         # RBAC: 'project.can_manage_project_members' check passed
         project = instance.project
         role_to_delete = instance.role
+        user_name = instance.user.get_full_name()
+        user_email = instance.user.email
         requester_role = self._get_requester_role(self.request.user, project)
         
         if not requester_role and getattr(self.request.user, 'role', '') == 'OWNER':
@@ -457,6 +591,21 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
                 raise PermissionDenied("Project Managers can only remove Developers or Testers.")
         else:
             raise PermissionDenied("You do not have permission to remove members from this project.")
+        recipients = get_all_project_members_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] Member Removed: {user_name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Team Member Removed",
+                'message_body': f"{user_name} ({user_email}) has been removed from the project.",
+                'details': {
+                    'Project': project.name,
+                    'Removed Member': user_name,
+                    'Removed By': self.request.user.get_full_name()
+                }
+            }
+        )
         instance.delete()
 class ManagedTeamMembersView(APIView):
     """
@@ -563,6 +712,24 @@ class AcceptProjectInvitationView(APIView):
         invitation.status = ProjectInvitation.Status.ACCEPTED
         invitation.save()
 
+        # --- [EMAIL INTEGRATION] Existing User Joined ---
+        # Notify project members that the user accepted and joined
+        recipients = get_all_project_members_emails(invitation.project)
+        send_notification_email(
+            subject=f"[{invitation.project.name}] New Member Joined: {request.user.get_full_name()}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Team Member Joined",
+                'message_body': f"{request.user.get_full_name()} has accepted the invitation and joined the project.",
+                'details': {
+                    'Member': request.user.get_full_name(),
+                    'Role': member.role,
+                    'Project': invitation.project.name
+                }
+            }
+        )
+
         serializer = ProjectMemberSerializer(member)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
@@ -601,5 +768,24 @@ class ActivateAndSetPasswordView(APIView):
         # 4. Mark invitation as accepted
         invitation.status = ProjectInvitation.Status.ACCEPTED
         invitation.save()
+
+        
+        # --- [EMAIL INTEGRATION] New User Activated/Joined ---
+        # Notify project members that the NEW user has set password and officially joined
+        recipients = get_all_project_members_emails(invitation.project)
+        send_notification_email(
+            subject=f"[{invitation.project.name}] New Member Activated: {user.get_full_name()}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Team Member Activated",
+                'message_body': f"{user.get_full_name()} has set their password and is now active in the project.",
+                'details': {
+                    'Member': user.get_full_name(),
+                    'Role': invitation.role,
+                    'Project': invitation.project.name
+                }
+            }
+        )
 
         return Response({'status': 'Account activated and password set successfully.'}, status=status.HTTP_200_OK)

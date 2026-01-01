@@ -3,6 +3,8 @@ from rest_framework.views import APIView
 from rest_framework.generics import UpdateAPIView
 from rest_framework.response import Response
 from rest_framework import status
+from django.conf import settings
+
 from rest_framework.exceptions import PermissionDenied
 from project.models import ProjectMember
 from task.models import Epic, Task
@@ -12,6 +14,9 @@ from .serializers import (
     EpicDateUpdateSerializer,
     TaskDateUpdateSerializer
 )
+
+from common.utils.email_service import send_notification_email, get_stakeholders_emails
+
 
 
 class TimelineDataView(APIView):
@@ -76,6 +81,35 @@ class EpicDateUpdateView(BaseDateUpdateView):
     """
     queryset = Epic.objects.all()
     serializer_class = EpicDateUpdateSerializer
+    def perform_update(self, serializer):
+        # Capture old values for context
+        old_start = serializer.instance.start_date
+        old_end = serializer.instance.end_date
+        
+        super().perform_update(serializer)
+        
+        epic = serializer.instance
+        
+        # --- [EMAIL INTEGRATION] Epic Dates Changed ---
+        # Notify Project Stakeholders (Owner, Admin, Managers)
+        recipients = get_stakeholders_emails(epic.project)
+        send_notification_email(
+            subject=f"[{epic.project.name}] Timeline Update: {epic.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Epic Timeline Updated",
+                'message_body': f"The timeline for Epic '{epic.name}' has been updated.",
+                'details': {
+                    'Epic': epic.name,
+                    'New Start': str(epic.start_date),
+                    'New End': str(epic.end_date),
+                    'Updated By': self.request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{epic.project.id}/timeline"
+            }
+        )
+
 
 
 class TaskDateUpdateView(BaseDateUpdateView):
@@ -85,4 +119,31 @@ class TaskDateUpdateView(BaseDateUpdateView):
     """
     queryset = Task.objects.all()
     serializer_class = TaskDateUpdateSerializer
+    def perform_update(self, serializer):
+        super().perform_update(serializer)
+        
+        task = serializer.instance
+        
+        # --- [EMAIL INTEGRATION] Task Dates Changed ---
+        # Notify Stakeholders + Assignees
+        recipients = get_stakeholders_emails(task.project)
+        assignees = task.assignees.values_list('user__email', flat=True)
+        recipients.extend(assignees)
+        
+        send_notification_email(
+            subject=f"[{task.project.name}] Schedule Update: {task.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Task Rescheduled",
+                'message_body': f"The dates for task '{task.title}' have been updated via the timeline.",
+                'details': {
+                    'Task': task.title,
+                    'New Start': str(task.start_date),
+                    'New Due Date': str(task.due_date),
+                    'Updated By': self.request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{task.project.id}/timeline"
+            }
+        )
 

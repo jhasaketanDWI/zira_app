@@ -1,3 +1,4 @@
+from django.conf import settings
 from .models import  Team, TeamMember
 from .serializers import(
      TeamListSerializer,
@@ -18,6 +19,7 @@ from rest_framework.decorators import action
 from common.permissions import IsOwnerAdminOrScrumMaster,RBACPermission
 from .permissions import IsTeamAdmin
 
+from common.utils.email_service import send_notification_email
 
 class TeamViewSet(viewsets.ModelViewSet):
     """
@@ -124,6 +126,29 @@ class TeamViewSet(viewsets.ModelViewSet):
         invited_emails = serializer.validated_data.get('successfully_invited_emails', [])
         # already_in_team_emails = serializer.validated_data.get('already_in_team_emails', [])
         
+
+        # --- [EMAIL INTEGRATION] New Team Created ---
+        # Notify Admins/Owners that a new team was formed
+        admins = User.objects.filter(role__in=['OWNER', 'ADMIN']).values_list('email', flat=True)
+        team_name = serializer.instance.name
+        
+        send_notification_email(
+            subject=f"[New Team] {team_name} Created",
+            recipients=list(admins),
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Team Created",
+                'message_body': f"A new team '{team_name}' has been created by {request.user.get_full_name()}.",
+                'details': {
+                    'Team Name': team_name,
+                    'Created By': request.user.get_full_name(),
+                    'Members Invited': len(invited_emails)
+                },
+                'action_url': f"{settings.FRONTEND_URL}/teams/{serializer.instance.id}"
+            }
+        )
+
+
         # Build the custom response
         response_data = {
             "status": "Team created successfully.",
@@ -151,6 +176,27 @@ class TeamViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         
         invitation_data = serializer.save()
+        invited_emails = invitation_data.get('invited', [])
+
+        # --- [EMAIL INTEGRATION] Team Invitation ---
+        # Note: Ideally, the serializer creates the invitations. 
+        # But if we send emails here, we iterate the list.
+        for email in invited_emails:
+            send_notification_email(
+                subject=f"Invitation to join Team: {team.name}",
+                recipients=[email],
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Team Invitation",
+                    'message_body': f"You have been invited to join the team '{team.name}'.",
+                    'details': {
+                        'Team': team.name,
+                        'Invited By': request.user.get_full_name()
+                    },
+                    # Assuming a frontend route to accept team invites
+                    'action_url': f"{settings.FRONTEND_URL}/teams/invitations" 
+                }
+            )
 
         response_data = {
             "status": "Invitations sent successfully.",
@@ -204,6 +250,20 @@ class RespondToTeamInvitationView(APIView):
         if action == 'accept':
             membership.status = TeamMember.MemberStatus.ACCEPTED
             membership.save()
+            # --- [EMAIL INTEGRATION] Invitation Accepted ---
+            # Notify the person who invited them
+            if membership.invited_by:
+                send_notification_email(
+                    subject=f"[{membership.team.name}] Invitation Accepted: {request.user.get_full_name()}",
+                    recipients=[membership.invited_by.email],
+                    template_path="emails/generic_notification.html",
+                    context={
+                        'title': "Invitation Accepted",
+                        'message_body': f"{request.user.get_full_name()} has accepted your invitation to join '{membership.team.name}'.",
+                        'details': {'New Member': request.user.get_full_name(), 'Team': membership.team.name}
+                    }
+                )
+            
             return Response({'status': f'Invitation to join {membership.team.name} accepted.'}, status=status.HTTP_200_OK)
         
         if action == 'decline':

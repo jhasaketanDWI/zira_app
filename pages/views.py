@@ -1,6 +1,7 @@
 from django.db import transaction
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from django.conf import settings
 
 from rest_framework import viewsets, status
 from rest_framework.permissions import IsAuthenticated
@@ -19,6 +20,7 @@ from .serializers import (
 from project.models import Project
 from task.models import Task
 from common.permissions import check_project_permission, RBACPermission
+from common.utils.email_service import send_notification_email, get_all_project_members_emails
 
 
 class PageViewSet(viewsets.ModelViewSet):
@@ -101,8 +103,25 @@ class PageViewSet(viewsets.ModelViewSet):
         check_project_permission(user, project, allowed_roles=[])
 
         # save with project enforced from URL/pick
-        serializer.save(project=project)
+        page= serializer.save(project=project)
 
+        # --- [EMAIL INTEGRATION] New Page Created ---
+        recipients = get_all_project_members_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] New Page Created: {page.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Documentation Page",
+                'message_body': f"A new page '{page.title}' has been created by {user.get_full_name()}.",
+                'details': {
+                    'Page Title': page.title,
+                    'Project': project.name,
+                    'Created By': user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/pages/{page.id}"
+            }
+        )
     def perform_update(self, serializer):
         """
         Permission check before updating.
@@ -111,7 +130,28 @@ class PageViewSet(viewsets.ModelViewSet):
         user = request.user
         instance = self.get_object()
         check_project_permission(user, instance.project, allowed_roles=[])
-        serializer.save()
+        old_title = instance.title
+        page = serializer.save()
+        
+        # --- [EMAIL INTEGRATION] Page Updated ---
+        # Only send mail if title changed or significant metadata update
+        if old_title != page.title:
+            recipients = get_all_project_members_emails(page.project)
+            send_notification_email(
+                subject=f"[{page.project.name}] Page Renamed: {page.title}",
+                recipients=recipients,
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Page Renamed",
+                    'message_body': f"The page '{old_title}' was renamed to '{page.title}'.",
+                    'details': {
+                        'New Title': page.title,
+                        'Old Title': old_title,
+                        'Updated By': user.get_full_name()
+                    },
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{page.project.id}/pages/{page.id}"
+                }
+            )
 
     def perform_destroy(self, instance):
         """
@@ -122,7 +162,26 @@ class PageViewSet(viewsets.ModelViewSet):
         user = request.user
         # If you want stricter control change allowed_roles argument
         check_project_permission(user, instance.project, allowed_roles=[])
+        project = instance.project
+        page_title = instance.title
         instance.delete()
+
+        # --- [EMAIL INTEGRATION] Page Deleted ---
+        recipients = get_all_project_members_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] Page Deleted: {page_title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Documentation Page Deleted",
+                'message_body': f"The page '{page_title}' has been permanently deleted.",
+                'details': {
+                    'Deleted Page': page_title,
+                    'Project': project.name,
+                    'Deleted By': user.get_full_name()
+                }
+            }
+        )
 
     @action(detail=True, methods=["get"], url_path="versions")
     def versions(self, request, pk=None, project_pk=None):
@@ -174,7 +233,24 @@ class PageViewSet(viewsets.ModelViewSet):
             page.title = source_ver.title
             page.latest_version = new_version_num
             page.save(update_fields=["title", "latest_version"])
-
+        
+        # --- [EMAIL INTEGRATION] Page Restored ---
+        recipients = get_all_project_members_emails(page.project)
+        send_notification_email(
+            subject=f"[{page.project.name}] Page Restored: {page.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Content Restored",
+                'message_body': f"The content of page '{page.title}' was restored to a previous version (v{version_num}).",
+                'details': {
+                    'Page': page.title,
+                    'Restored To': f"Version {version_num}",
+                    'Restored By': request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{page.project.id}/pages/{page.id}"
+            }
+        )
         return Response(
             PageSerializer(page, context={"request": request}).data,
             status=status.HTTP_200_OK,
@@ -266,6 +342,24 @@ class PageViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         attachment = serializer.save()
 
+        # --- [EMAIL INTEGRATION] Attachment Uploaded ---
+        recipients = get_all_project_members_emails(page.project)
+        send_notification_email(
+            subject=f"[{page.project.name}] File Attached: {page.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New File Attachment",
+                'message_body': f"A new file has been attached to page '{page.title}'.",
+                'details': {
+                    'Page': page.title,
+                    'File Name': file_obj.name,
+                    'Uploaded By': request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{page.project.id}/pages/{page.id}"
+            }
+        )
+
         # Return created attachment with helpful fields (including file URL)
         out = PageAttachmentSerializer(attachment, context={"request": request}).data
         return Response(out, status=status.HTTP_201_CREATED)
@@ -297,5 +391,25 @@ class PageViewSet(viewsets.ModelViewSet):
         serializer = TaskPageLinkSerializer(data=data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         link = serializer.save()
+
+
+        # --- [EMAIL INTEGRATION] Task Linked ---
+        recipients = get_all_project_members_emails(page.project)
+        send_notification_email(
+            subject=f"[{page.project.name}] Page Linked to Task-{task.id}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Page Linked to Task",
+                'message_body': f"The page '{page.title}' has been linked to task '{task.title}'.",
+                'details': {
+                    'Page': page.title,
+                    'Task': f"{task.id}: {task.title}",
+                    'Linked By': request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{page.project.id}/pages/{page.id}"
+            }
+        )
+
 
         return Response(TaskPageLinkSerializer(link).data, status=status.HTTP_201_CREATED)

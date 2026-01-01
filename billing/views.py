@@ -5,6 +5,9 @@ from common.permissions import RBACPermission
 from rest_framework.permissions import IsAuthenticated
 from .models import SubscriptionPlan, Subscription, Invoice
 from .serializers import SubscriptionPlanSerializer, SubscriptionSerializer, InvoiceSerializer
+from common.utils.email_service import send_notification_email
+from django.conf import settings
+
 
 class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     """
@@ -57,15 +60,67 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         ip = get_client_ip(self.request)
         # The owner is automatically set to the currently logged-in user.
-        serializer.save(
+        subscription = serializer.save(
             owner=self.request.user,
             created_by=ip,
             updated_by=ip,
         )
+        # [EMAIL] New Subscription Started
+        send_notification_email(
+            subject=f"Welcome to {subscription.plan.name} Plan",
+            recipients=[self.request.user.email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Subscription Started",
+                'message_body': f"Thank you for subscribing to the {subscription.plan.name} plan.",
+                'details': {
+                    'Plan': subscription.plan.name,
+                    'Start Date': str(subscription.start_date),
+                    'End Date': str(subscription.end_date),
+                    'Status': subscription.status
+                },
+                'action_url': f"{settings.FRONTEND_URL}/billing/subscriptions"
+            }
+        )
 
     def perform_update(self, serializer):
         ip = get_client_ip(self.request)
-        serializer.save(updated_by=ip)
+        subscription = serializer.save(updated_by=ip)
+        
+        # [EMAIL] Subscription Updated
+        send_notification_email(
+            subject="Subscription Updated",
+            recipients=[self.request.user.email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Subscription Plan Updated",
+                'message_body': "Your subscription details have been updated.",
+                'details': {
+                    'Current Plan': subscription.plan.name,
+                    'Status': subscription.status,
+                    'Updated By': self.request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/billing/subscriptions"
+            }
+        )
+    def perform_destroy(self, instance):
+        # [EMAIL] Subscription Cancelled
+        plan_name = instance.plan.name
+        send_notification_email(
+            subject="Subscription Cancelled",
+            recipients=[self.request.user.email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Subscription Cancelled",
+                'message_body': f"Your subscription to the {plan_name} plan has been cancelled.",
+                'details': {
+                    'Plan': plan_name,
+                    'Cancelled By': self.request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/billing"
+            }
+        )
+        instance.delete()
 
 
 class InvoiceViewSet(viewsets.ModelViewSet):
@@ -96,7 +151,28 @@ class InvoiceViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         ip = get_client_ip(self.request)
-        serializer.save(created_by=ip, updated_by=ip)
+        invoice = serializer.save(created_by=ip, updated_by=ip)
+
+        # [EMAIL] New Invoice Generated
+        # Determine recipient from the related subscription owner
+        recipient_email = invoice.subscription.owner.email
+        
+        send_notification_email(
+            subject=f"New Invoice Available: #{invoice.id}",
+            recipients=[recipient_email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Invoice Generated",
+                'message_body': "A new invoice has been generated for your subscription.",
+                'details': {
+                    'Invoice ID': f"#{invoice.id}",
+                    'Amount': f"${invoice.amount}",
+                    'Plan': invoice.subscription.plan.name,
+                    'Date': str(invoice.issue_date)
+                },
+                'action_url': f"{settings.FRONTEND_URL}/billing/invoices/{invoice.id}"
+            }
+        )
 
     def perform_update(self, serializer):
         ip = get_client_ip(self.request)

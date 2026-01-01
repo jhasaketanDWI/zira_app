@@ -14,6 +14,7 @@ class Project(AuditBaseModel):
             ("can_manage_workflows", "User can create and edit custom workflow schemes"),
             # ("can_have_full_project_access", "User can do any changes on project including task, sprint, epic etc"),
             ("can_delete_project", "User can delete a project"),
+            ("can_view_project_summary","can_view_project_settings")
         ]
     class Status(models.TextChoices):
         PLANNED = 'PLANNED', 'Planned'

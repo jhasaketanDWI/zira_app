@@ -39,6 +39,8 @@ from allauth.socialaccount.providers.google.views import GoogleOAuth2Adapter
 from allauth.socialaccount.providers.oauth2.client import OAuth2Client
 from dj_rest_auth.registration.views import SocialLoginView
 from rest_framework.decorators import action
+from common.utils.email_service import send_notification_email
+
 
 class CurrentUserView(generics.RetrieveAPIView):
     """
@@ -99,6 +101,18 @@ class UserViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
+        # [EMAIL] System User Created Manually
+        send_notification_email(
+            subject="Account Created",
+            recipients=[user.email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Welcome to the System",
+                'message_body': f"An account has been created for you by {request.user.get_full_name()}.",
+                'details': {'Username': user.email, 'Role': user.role},
+                'action_url': f"{settings.FRONTEND_URL}/login"
+            }
+        )
         response_serializer = UserSerializer(user)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
 
@@ -107,6 +121,17 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         user.is_active = False
         user.save()
+         # [EMAIL] User Deactivated
+        send_notification_email(
+            subject="Account Deactivated",
+            recipients=[user.email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Account Deactivated",
+                'message_body': "Your account has been deactivated by an administrator. Please contact support if you believe this is an error.",
+                'details': {'Action By': request.user.get_full_name()}
+            }
+        )
         return Response({'status': 'user deactivated'})
 
     @action(detail=True, methods=['patch'],url_path='activate-user')
@@ -114,6 +139,17 @@ class UserViewSet(viewsets.ModelViewSet):
         user = self.get_object()
         user.is_active = True
         user.save()
+        # [EMAIL] User Reactivated
+        send_notification_email(
+            subject="Account Reactivated",
+            recipients=[user.email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Account Active",
+                'message_body': "Your account has been reactivated. You may now log in.",
+                'action_url': f"{settings.FRONTEND_URL}/login"
+            }
+        )
         return Response({'status': 'user activated'})
 
 
@@ -277,7 +313,29 @@ class UserSoftDeleteAPIView(generics.DestroyAPIView):
         Overrides the default destroy method to return a custom message.
         """
         instance = self.get_object()
+        user_name = instance.get_full_name()
+        user_email = instance.email
+
         self.perform_destroy(instance)
+         # --- [EMAIL INTEGRATION] User Removed Broadcast ---
+        # "if a user is deleted then send mail to other users that he/she has been removed"
+        
+        # Get all active users to notify
+        recipients = User.objects.filter(is_active=True, is_deleted=False).exclude(id=instance.id).values_list('email', flat=True)
+        
+        send_notification_email(
+            subject=f"[User Removed] {user_name} has left the organization",
+            recipients=list(recipients),
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "User Removed",
+                'message_body': f"The user {user_name} ({user_email}) has been removed from the system.",
+                'details': {
+                    'Removed User': user_name,
+                    'Removed By': request.user.get_full_name()
+                }
+            }
+        )
         
         return Response(
             {"message": f"User '{instance.email}' was successfully soft-deleted."},
@@ -345,12 +403,30 @@ class InviteUserView(generics.CreateAPIView):
             is_active=False # User remains inactive until password is set
         )
 
-        invitation_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
-        send_mail(
-            subject='You have been invited to join test-app!',
-            message=f"Hello, Please click the link to set your password and activate your account: {invitation_link}",
-            from_email=settings.DEFAULT_FROM_EMAIL,
-            recipient_list=[invitation.email],
+        # invitation_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
+        # send_mail(
+        #     subject='You have been invited to join test-app!',
+        #     message=f"Hello, Please click the link to set your password and activate your account: {invitation_link}",
+        #     from_email=settings.DEFAULT_FROM_EMAIL,
+        #     recipient_list=[invitation.email],
+        # )
+
+         # --- [EMAIL INTEGRATION] Invitation Email ---
+        invitation_link = f"{settings.FRONTEND_URL}/set-password?token={invitation.token}"
+        
+        send_notification_email(
+            subject='You have been invited to join the Team',
+            recipients=[invitation.email],
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Welcome!",
+                'message_body': f"Hello, you have been invited to join the platform by {self.request.user.get_full_name()}.",
+                'details': {
+                    'Role': invitation.role,
+                    'Invited By': self.request.user.get_full_name()
+                },
+                'action_url': invitation_link
+            }
         )
 
 class SetPasswordView(APIView):
@@ -407,6 +483,28 @@ class SetPasswordView(APIView):
         # Mark the invitation as accepted
         invitation_to_accept.status = "ACCEPTED" # Both models use "ACCEPTED"
         invitation_to_accept.save()
+
+        # --- [EMAIL INTEGRATION] Broadcast New User Joined ---
+        # "send mail to all other users... if multiple user joined... send one by one"
+        # The email service handles the loop.
+        
+        all_active_users = User.objects.filter(is_active=True, is_deleted=False).exclude(id=user_to_activate.id).values_list('email', flat=True)
+        
+        send_notification_email(
+            subject=f"[New Member] {user_to_activate.get_full_name()} has joined!",
+            recipients=list(all_active_users),
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Team Member",
+                'message_body': f"Please welcome {user_to_activate.get_full_name()} to the organization.",
+                'details': {
+                    'Name': user_to_activate.get_full_name(),
+                    'Email': user_to_activate.email,
+                    'Role': user_to_activate.role
+                }
+            }
+        )
+
 
         return Response({'status': 'Account activated and password set successfully.'}, status=status.HTTP_200_OK)
 class ManagerTeamListView(generics.ListAPIView):
