@@ -11,10 +11,19 @@ class IsTeamAdmin(BasePermission):
     def has_object_permission(self, request, view, obj):
         # 'obj' here is the Team instance
         try:
+            user = request.user
+
+            if user.is_super_admin:
+                return True
+
+            if user.organization != obj.organization:
+                return False
+
             membership = TeamMember.objects.get(
                 team=obj,
-                user=request.user
+                user=user
             )
+
         except TeamMember.DoesNotExist:
             return False
 

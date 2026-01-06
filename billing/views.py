@@ -1,6 +1,5 @@
 from django.shortcuts import render
 from rest_framework import viewsets, permissions
-from common.utils import get_client_ip
 from common.permissions import RBACPermission
 from rest_framework.permissions import IsAuthenticated
 from .models import SubscriptionPlan, Subscription, Invoice
@@ -20,14 +19,12 @@ class SubscriptionPlanViewSet(viewsets.ModelViewSet):
     permission_classes = [permissions.IsAdminUser]
 
     def perform_create(self, serializer):
-        ip = get_client_ip(self.request)
-        # Corrected to use the 'created_by' and 'updated_by' fields from AuditBaseModel.
-        serializer.save(created_by=ip, updated_by=ip)
+        # Save the user who created and updated the plan
+        serializer.save(created_by=self.request.user, updated_by=self.request.user)
 
     def perform_update(self, serializer):
-        ip = get_client_ip(self.request)
-        # Corrected to use the 'updated_by' field.
-        serializer.save(updated_by=ip)
+        # Update the user who modified the plan
+        serializer.save(updated_by=self.request.user)
 
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
@@ -35,17 +32,17 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
     API endpoint that allows users to view and manage their own subscriptions.
     """
     serializer_class = SubscriptionSerializer
-    permission_classes = [IsAuthenticated,RBACPermission]
+    permission_classes = [IsAuthenticated, RBACPermission]
     perms_map = {
         # Viewing subscription details requires permission (usually Owner/Billing Admin)
         'list': 'billing.can_manage_subscription',
         'retrieve': 'billing.can_manage_subscription',
-        
+
         # Creating/Upgrading plans
         'create': 'billing.can_manage_subscription',
         'update': 'billing.can_manage_subscription',
         'partial_update': 'billing.can_manage_subscription',
-        
+
         # Canceling subscription
         'destroy': 'billing.can_manage_subscription',
     }
@@ -58,12 +55,11 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         return Subscription.objects.filter(owner=self.request.user)
 
     def perform_create(self, serializer):
-        ip = get_client_ip(self.request)
         # The owner is automatically set to the currently logged-in user.
         subscription = serializer.save(
             owner=self.request.user,
-            created_by=ip,
-            updated_by=ip,
+            created_by=self.request.user,
+            updated_by=self.request.user,
         )
         # [EMAIL] New Subscription Started
         send_notification_email(
@@ -84,9 +80,8 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        ip = get_client_ip(self.request)
-        subscription = serializer.save(updated_by=ip)
-        
+        subscription = serializer.save(updated_by=self.request.user)
+
         # [EMAIL] Subscription Updated
         send_notification_email(
             subject="Subscription Updated",
@@ -103,6 +98,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
                 'action_url': f"{settings.FRONTEND_URL}/billing/subscriptions"
             }
         )
+
     def perform_destroy(self, instance):
         # [EMAIL] Subscription Cancelled
         plan_name = instance.plan.name
@@ -128,15 +124,15 @@ class InvoiceViewSet(viewsets.ModelViewSet):
     API endpoint that allows users to view invoices for their subscriptions.
     """
     serializer_class = InvoiceSerializer
-    permission_classes = [IsAuthenticated,RBACPermission]
+    permission_classes = [IsAuthenticated, RBACPermission]
     perms_map = {
         # Viewing invoices
         'list': 'billing.can_view_all_invoices',
         'retrieve': 'billing.can_view_all_invoices',
-        
+
         # Creating/Editing invoices is typically automated or Admin-only,
         # but if exposed, it requires high-level billing permissions.
-        'create': 'billing.can_manage_subscription', 
+        'create': 'billing.can_manage_subscription',
         'update': 'billing.can_manage_subscription',
         'partial_update': 'billing.can_manage_subscription',
         'destroy': 'billing.can_manage_subscription',
@@ -150,13 +146,16 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         return Invoice.objects.filter(subscription__owner=self.request.user)
 
     def perform_create(self, serializer):
-        ip = get_client_ip(self.request)
-        invoice = serializer.save(created_by=ip, updated_by=ip)
+        # Use self.request.user for auditing
+        invoice = serializer.save(
+            created_by=self.request.user,
+            updated_by=self.request.user
+        )
 
         # [EMAIL] New Invoice Generated
         # Determine recipient from the related subscription owner
         recipient_email = invoice.subscription.owner.email
-        
+
         send_notification_email(
             subject=f"New Invoice Available: #{invoice.id}",
             recipients=[recipient_email],
@@ -175,6 +174,5 @@ class InvoiceViewSet(viewsets.ModelViewSet):
         )
 
     def perform_update(self, serializer):
-        ip = get_client_ip(self.request)
-        serializer.save(updated_by=ip)
-
+        # Use self.request.user for auditing
+        serializer.save(updated_by=self.request.user)

@@ -13,9 +13,19 @@ class InvitationSerializer(serializers.ModelSerializer):
         """
         Check if a user with this email already exists.
         """
-        if User.objects.filter(email__iexact=value).exists():
-            raise serializers.ValidationError("A user with this email already exists.")
+        request = self.context['request']
+        org = request.user.organization
+
+        if Invitation.objects.filter(
+                email__iexact=value,
+                organization=org,
+                status=Invitation.Status.PENDING
+        ).exists():
+            raise serializers.ValidationError(
+                "An invitation for this email already exists in your organization."
+            )
         return value
+
     def validate_role(self, value):
         # Ensure owner cannot invite another owner or admin
         if value in [User.Role.ADMIN, User.Role.OWNER]:
@@ -205,6 +215,7 @@ class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
         data['user_id'] = user.id
 
         return data
+
 class AdminUserManagementSerializer(serializers.ModelSerializer):
     """Serializer for admins to create and update user accounts."""
     class Meta:
@@ -213,9 +224,16 @@ class AdminUserManagementSerializer(serializers.ModelSerializer):
         read_only_fields = ['id']
 
     def create(self, validated_data):
+        request = self.context['request']
+
         validated_data['is_active'] = validated_data.get('is_active', False)
+
+        if not request.user.is_super_admin:
+            validated_data['organization'] = request.user.organization
+
         user = User.objects.create(**validated_data)
-        return user    
+        return user
+
 
 class ChangePasswordSerializer(serializers.Serializer):
     old_password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})

@@ -27,8 +27,22 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
     project = _ProjectNestedSerializer(read_only=True)
 
     user_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all(), source='user', write_only=True
+        queryset=User.objects.none(), source='user', write_only=True
     )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        request = self.context.get("request")
+        project = self.context.get("project")
+
+        if request and project:
+            if request.user.is_super_admin:
+                self.fields['user_id'].queryset = User.objects.all()
+            else:
+                self.fields['user_id'].queryset = User.objects.filter(
+                    organization=project.organization
+                )
+
     # project_id = serializers.PrimaryKeyRelatedField(
     #     queryset=Project.objects.all(), source='project', write_only=True
     # )
@@ -69,6 +83,7 @@ class ProjectMemberBulkAssignByRoleSerializer(serializers.Serializer):
 
     class Meta:
         fields = ['user_id', 'role']
+
 class ProjectSerializer(serializers.ModelSerializer):
     owner = _UserNestedSerializer(read_only=True)
     project_manager_id = serializers.PrimaryKeyRelatedField(
@@ -85,12 +100,13 @@ class ProjectSerializer(serializers.ModelSerializer):
         read_only_fields = ["owner"]
 
     def create(self, validated_data):
+        request = self.context.get("request")
         validated_data.pop('project_manager', None)
+
+        # Organization is derived, never from payload
+        validated_data["organization"] = request.user.organization
+
         return super().create(validated_data)
-        # request = self.context.get("request")
-        # if request and request.user.is_authenticated:
-        #     validated_data["owner"] = request.user
-        # return Project.objects.create(**validated_data)
 
     def validate_owner(self, value):
         """

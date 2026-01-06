@@ -71,6 +71,7 @@ INSTALLED_APPS = [
     'team',
     'timeline',
     'pages',
+    'organizations',
 
 
     # Allauth apps
@@ -165,7 +166,7 @@ DATABASES = {
         'NAME': 'jira_app',
         'HOST': 'localhost',
         'USER': 'root',
-        'PASSWORD': 'root',
+        'PASSWORD': 'Mipaltan@10',
     }
 }
 

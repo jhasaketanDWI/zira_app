@@ -69,6 +69,7 @@ class TeamListSerializer(serializers.ModelSerializer):
             read_only=True
         )
         return serializer.data
+
 class TeamCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating a new team (POST /api/teams/).
@@ -131,6 +132,7 @@ class TeamCreateSerializer(serializers.ModelSerializer):
             # 1. Create the team
             team = Team.objects.create(
                 created_by=requesting_user,
+                organization=requesting_user.organization,
                 **validated_data
             )
 
@@ -203,7 +205,11 @@ class TeamInviteSerializer(serializers.Serializer):
         
         for email in set(email.lower() for email in emails):
             try:
-                user = User.objects.get(email__iexact=email, is_active=True)
+                user = User.objects.get(
+                    email__iexact=email,
+                    is_active=True,
+                    organization=self.context['request'].user.organization
+                )
                 validated_users.append(user)
             except User.DoesNotExist:
                 invalid_emails.append(email)

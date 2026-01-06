@@ -2,12 +2,18 @@ from django.db import models
 from django.conf import settings
 from common.models import AuditBaseModel
 from user.models import User
+from organizations.models import Organization
 
 
 class Team(AuditBaseModel, models.Model):
     """
     Represents a group of users (a team).
     """
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='teams'
+    )
     name = models.CharField(max_length=100, unique=True)
     about = models.TextField(blank=True, null=True, help_text="A description of the team.")
     created_by = models.ForeignKey(
@@ -28,6 +34,12 @@ class Team(AuditBaseModel, models.Model):
             ("can_edit_team", "User can update team name and description"),
             ("can_delete_team", "User can delete teams"),
             ("can_view_all_teams", "User can view all teams (Admin view)"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=['organization', 'name'],
+                name='unique_team_name_per_organization'
+            )
         ]
 
 

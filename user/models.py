@@ -4,6 +4,7 @@ from common.models import AuditBaseModel, SoftDeleteModel
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 import uuid
 from common.manager import SoftDeleteManager
+from organizations.models import Organization
 
 # Invitations model
 class Invitation(models.Model):
@@ -11,7 +12,12 @@ class Invitation(models.Model):
         PENDING = "PENDING", "Pending"
         ACCEPTED = "ACCEPTED", "Accepted"
 
-    email = models.EmailField(unique=True)
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name="invitations"
+    )
+    email = models.EmailField()
     role = models.CharField(max_length=50)
     token = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     status = models.CharField(max_length=10, choices=Status.choices, default=Status.PENDING)
@@ -39,7 +45,9 @@ class CustomUserManager(BaseUserManager,SoftDeleteManager):
 
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('is_superuser', True)
+        extra_fields.setdefault('role', 'OWNER')
+        extra_fields.setdefault('is_super_admin', True)
+        extra_fields.setdefault('organization', None)
         extra_fields.setdefault('is_active', True)
         extra_fields.setdefault('role', 'OWNER')  # Default role for superuser
 
@@ -77,6 +85,16 @@ class User(AbstractUser, AuditBaseModel, SoftDeleteModel):
     role = models.CharField(max_length=50, default=Role.OWNER)   
     phone = models.CharField(max_length=20, blank=True, null=True) # Add this line
 
+    # Mapping super admin users to organizations
+    is_super_admin = models.BooleanField(default=False)
+
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="users"
+    )
 
     # Add related_name to resolve clashes with default User model
     groups = models.ManyToManyField(

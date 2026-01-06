@@ -83,8 +83,11 @@ class UserViewSet(viewsets.ModelViewSet):
         - If the user is an OWNER, exclude them from the list.
         """
         user = self.request.user
-        base_queryset = User.objects.all().order_by('-id').filter(is_deleted=False)
-        
+        base_queryset = User.objects.filter(is_deleted=False).order_by('-id')
+
+        if not user.is_super_admin:
+            base_queryset = base_queryset.filter(organization=user.organization)
+
         # Check if the user is authenticated and has the OWNER role
         if user.is_authenticated and user.role == User.Role.OWNER:
             # Exclude the owner from the list
@@ -195,11 +198,29 @@ class TeamStatsView(APIView):
         user = request.user
         if user.role == User.Role.OWNER or user.role == User.Role.ADMIN or user.role == User.Role.SCRUM_MASTER or user.role == User.Role.MANAGER:
             # --- Global Stats for Owner/Admin ---
-            total_members = User.objects.count()
-            active_members = User.objects.filter(is_active=True).count()
-            active_projects = Project.objects.exclude(
-                status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
-            ).count()
+            if user.is_super_admin:
+                total_members = User.objects.filter(is_deleted=False).count()
+                active_members = User.objects.filter(is_active=True, is_deleted=False).count()
+                active_projects = Project.objects.exclude(
+                    status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
+                ).count()
+            else:
+                total_members = User.objects.filter(
+                    organization=user.organization,
+                    is_deleted=False
+                ).count()
+
+                active_members = User.objects.filter(
+                    organization=user.organization,
+                    is_active=True,
+                    is_deleted=False
+                ).count()
+
+                active_projects = Project.objects.filter(
+                    organization=user.organization
+                ).exclude(
+                    status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
+                ).count()
 
             stats = {
                 'total_members': total_members,
@@ -394,13 +415,17 @@ class InviteUserView(generics.CreateAPIView):
     } 
 
     def perform_create(self, serializer):
-        invitation = serializer.save(invited_by=self.request.user)
+        invitation = serializer.save(
+            invited_by=self.request.user,
+            organization=self.request.user.organization
+        )
         temporary_password = get_random_string(length=12)
         User.objects.create_user(
             email=invitation.email,
             password=None,
             role=invitation.role,
-            is_active=False # User remains inactive until password is set
+            is_active=False,
+            organization=self.request.user.organization
         )
 
         # invitation_link = f"https://kanban.dreamwaveinnovations.com/set-password?token={invitation.token}"
@@ -487,8 +512,13 @@ class SetPasswordView(APIView):
         # --- [EMAIL INTEGRATION] Broadcast New User Joined ---
         # "send mail to all other users... if multiple user joined... send one by one"
         # The email service handles the loop.
-        
-        all_active_users = User.objects.filter(is_active=True, is_deleted=False).exclude(id=user_to_activate.id).values_list('email', flat=True)
+
+        all_active_users = User.objects.filter(
+            is_active=True,
+            is_deleted=False
+        ).filter(
+            organization=user_to_activate.organization
+        ) | User.objects.filter(is_super_admin=True)
         
         send_notification_email(
             subject=f"[New Member] {user_to_activate.get_full_name()} has joined!",
@@ -720,7 +750,8 @@ class FilteredUserListView(generics.ListAPIView):
         queryset = User.objects.filter(
             is_deleted=False, 
             is_active=True, 
-            role__in=allowed_roles
+            role__in=allowed_roles,
+            organization=requesting_user.organization
         )
 
         # Apply the optional role filter from the query parameter

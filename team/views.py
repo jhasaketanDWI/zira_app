@@ -44,27 +44,28 @@ class TeamViewSet(viewsets.ModelViewSet):
         # Custom Action
         'invite_members': 'team.can_invite_team_members',
     }
+
     def get_queryset(self):
-        """
-        --- MODIFIED ---
-        Overrides the queryset.
-        - Global Owners/Admins see ALL teams.
-        - Other users only see teams they are an "ACCEPTED" member of.
-        """
         user = self.request.user
+
         if not user.is_authenticated:
             return Team.objects.none()
-        
+
+        if user.is_super_admin:
+            return Team.objects.all().distinct()
+
         if user.role in [User.Role.OWNER, User.Role.ADMIN]:
-            # Admins/Owners get to see all teams
-            return Team.objects.all().distinct()
-        
+            return Team.objects.filter(
+                organization=user.organization
+            ).distinct()
+
         if user.has_perm('team.can_view_all_teams'):
-            return Team.objects.all().distinct()
-            
+            return Team.objects.filter(
+                organization=user.organization
+            ).distinct()
 
         return user.teams.filter(
-            team_memberships__user=user,
+            organization=user.organization,
             team_memberships__status=TeamMember.MemberStatus.ACCEPTED
         ).distinct()
 
@@ -85,7 +86,12 @@ class TeamViewSet(viewsets.ModelViewSet):
         - Admins/Owners can 'retrieve' ANY team.
         """
         user = self.request.user
-        obj = get_object_or_404(Team.objects.all(), pk=self.kwargs.get('pk'))
+        qs = Team.objects.all()
+
+        if not user.is_super_admin:
+            qs = qs.filter(organization=user.organization)
+
+        obj = get_object_or_404(qs, pk=self.kwargs.get('pk'))
 
         # Allow Admins/Owners to retrieve any team
         if user.role in [User.Role.OWNER, User.Role.ADMIN]:
@@ -129,7 +135,10 @@ class TeamViewSet(viewsets.ModelViewSet):
 
         # --- [EMAIL INTEGRATION] New Team Created ---
         # Notify Admins/Owners that a new team was formed
-        admins = User.objects.filter(role__in=['OWNER', 'ADMIN']).values_list('email', flat=True)
+        admins = User.objects.filter(
+            role__in=['OWNER', 'ADMIN'],
+            organization=request.user.organization
+        ) | User.objects.filter(is_super_admin=True)
         team_name = serializer.instance.name
         
         send_notification_email(

@@ -3,6 +3,7 @@ from django.conf import settings
 from django.utils import timezone
 from common.models import AuditBaseModel
 import uuid
+from organizations.models import Organization
 
 class Project(AuditBaseModel):
     class Meta:
@@ -23,6 +24,11 @@ class Project(AuditBaseModel):
         COMPLETED = 'COMPLETED', 'Completed'
         ARCHIVED = 'ARCHIVED', 'Archived'
 
+    organization = models.ForeignKey(
+        Organization,
+        on_delete=models.CASCADE,
+        related_name='projects'
+    )
     name = models.CharField(max_length=255)
     description = models.TextField(blank=True, null=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, related_name='owned_projects', on_delete=models.CASCADE)

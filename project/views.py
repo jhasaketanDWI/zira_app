@@ -45,96 +45,72 @@ class ProjectViewSet(viewsets.ModelViewSet):
         if self.action == 'retrieve':
                 return ProjectDetailSerializer
         return ProjectSerializer
+
     def get_queryset(self):
-        user=self.request.user
+        user = self.request.user
+
+        if user.is_super_admin:
+            return Project.objects.all().order_by("-id")
+
         return Project.objects.filter(
+            organization=user.organization
+        ).filter(
             Q(owner=user) | Q(projectmember__user=user)
-        ).distinct() .order_by("-id")
-    
+        ).distinct().order_by("-id")
+
     @transaction.atomic
     def perform_create(self, serializer):
-        manager_to_assign = serializer.validated_data.get('MANAGER ')
-
-        # 1. Save the Project (Creator becomes the Project Owner)
-        project = serializer.save(owner=self.request.user)
         creator = self.request.user
 
-        # FIX 1: Use a set of IDs for efficient lookups and exclusion
-        # Initialize with the creator's ID
-        users_to_exclude_ids = {creator.id}
-        
-        # FIX 2: Create a list of ProjectMember objects directly
-        members_to_create = []
-        
-        # Add the creator (owner) immediately
-        members_to_create.append(
+        # Assign project to creator's organization
+        project = serializer.save(
+            owner=creator,
+            organization=creator.organization
+        )
+
+        # Automatically add creator as OWNER in project
+        members_to_create = [
             ProjectMember(
                 user=creator,
                 project=project,
                 role=ProjectMember.Role.OWNER
             )
-        )
-        
-        # --- NEW LOGIC: Automatically Add Organization Owner and Scrum Masters ---
-        
-        # 2. Find the Organization Owner(s)
-        # Assuming the role is 'ORG_OWNER'
-        org_owners = User.objects.filter(role='OWNER').exclude(id__in=users_to_exclude_ids)
+        ]
+
+        # Auto-add all OWNERS in the same organization
+        org_owners = User.objects.filter(
+            role=User.Role.OWNER,
+            organization=creator.organization
+        ).exclude(id=creator.id)
+
         for owner in org_owners:
             members_to_create.append(
                 ProjectMember(
                     user=owner,
                     project=project,
-                    role=ProjectMember.Role.OWNER # Assign the highest role for visibility
+                    role=ProjectMember.Role.OWNER
                 )
             )
-            users_to_exclude_ids.add(owner.id) # Track ID to exclude from later queries
 
-        # 3. Find all Scrum Masters
-        scrum_masters = User.objects.filter(role='SCRUM_MASTER').exclude(id__in=users_to_exclude_ids)
-        for sm in scrum_masters:
-            # Add them with the Scrum Master role
-            members_to_create.append(
-                ProjectMember(
-                    user=sm,
-                    project=project,
-                    role=ProjectMember.Role.SCRUM_MASTER
-                )
-            )
-            users_to_exclude_ids.add(sm.id)
-            
-        # 4. Handle Manager assignment (if provided in the request)
-        if manager_to_assign and manager_to_assign != creator:
-            # Check if manager is already added as Owner/SCM
-            if manager_to_assign.id not in users_to_exclude_ids:
-                members_to_create.append(
-                    ProjectMember(
-                        user=manager_to_assign,
-                        project=project,
-                        role=ProjectMember.Role.MANAGER
-                    )
-                )
-            
-        # 5. Create all ProjectMember entries in bulk
         ProjectMember.objects.bulk_create(members_to_create)
 
-        # --- [EMAIL INTEGRATION] New Project Created ---
-        # Notify ALL users in the system that a new project exists 
-        all_users = User.objects.values_list('email', flat=True)
+        # Notify same-org users + super admins
+        recipients = list(
+            User.objects.filter(
+                organization=project.organization,
+                is_active=True
+            ).values_list('email', flat=True)
+        ) + list(
+            User.objects.filter(
+                is_super_admin=True
+            ).values_list('email', flat=True)
+        )
+
+        #Needs to be modified
         send_notification_email(
-            subject=f"[New Project] {project.name} launched",
-            recipients=list(all_users),
-            template_path="emails/generic_notification.html",
-            context={
-                'title': "New Project Created",
-                'message_body': f"A new project '{project.name}' has been created by {creator.get_full_name()}.",
-                'details': {
-                    'Project Name': project.name,
-                    'Key': project.key,
-                    'Owner': creator.get_full_name()
-                },
-                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}"
-            }
+            subject="A new project has been created",
+            message=f"Project '{project.name}' has been created in your organization.",
+            recipient_list=recipients,
         )
 
     def perform_update(self, serializer):
@@ -201,8 +177,11 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return Response({"error": f"As a {requester_role}, you cannot query for available {role}s."}, status=status.HTTP_403_FORBIDDEN)
 
         existing_member_ids = ProjectMember.objects.filter(project=project).values_list('user_id', flat=True)
-        available_users = User.objects.exclude(id__in=existing_member_ids)
-        
+        available_users = User.objects.exclude(
+            id__in=existing_member_ids
+        ).filter(
+            organization=project.organization
+        )
         global_role_map = {'manager': 'MANAGER', 'developer': 'DEVELOPER', 'tester': 'TESTER', 'scrum_master': 'SCRUM_MASTER' }
         role_to_filter_by = global_role_map.get(role.lower())
         if role_to_filter_by:
@@ -245,8 +224,12 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             requester_role = requester_membership.role
         except ProjectMember.DoesNotExist:
             # Allow Global Owner view access
-            if getattr(user, 'role', '') == 'OWNER':
+            if (
+                    getattr(user, 'role', '') == 'OWNER' and
+                    project.organization == user.organization
+            ):
                 requester_role = ProjectMember.Role.OWNER
+
             else:
                 return ProjectMember.objects.none()
 
@@ -402,7 +385,10 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         if ProjectInvitation.objects.filter(project=project, email__iexact=email_to_invite, status=ProjectInvitation.Status.PENDING).exists():
             return Response({'error': 'An invitation has already been sent to this email address.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        existing_user = User.objects.filter(email__iexact=email_to_invite).first()
+        existing_user = User.objects.filter(
+            email__iexact=email_to_invite,
+            organization=project.organization
+        ).first()
         if existing_user:
             # Case 1: Existing User
             invitation = ProjectInvitation.objects.create(
@@ -441,12 +427,13 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             global_role = global_role_map.get(project_role_to_assign, User.Role.DEVELOPER)
 
             new_user = User.objects.create_user(
-                email=email_to_invite, 
-                password=None, 
-                role=global_role, 
-                is_active=False 
+                email=email_to_invite,
+                password=None,
+                role=global_role,
+                is_active=False,
+                organization=project.organization
             )
-            
+
             # NOTE: We create the member entry immediately for new users in your logic
             ProjectMember.objects.create(project=project, user=new_user, role=project_role_to_assign)
 
@@ -642,6 +629,17 @@ class ProjectSummaryView(APIView):
     perms_map = {
         'retrieve': 'project.can_view_project_settings' # Or can_view_project
     }
+    project = get_object_or_404(Project, pk=project_id)
+
+    if (
+            not request.user.is_super_admin and
+            project.organization != request.user.organization
+    ):
+        return Response(
+            {"error": "You do not have access to this project."},
+            status=status.HTTP_403_FORBIDDEN
+        )
+
     def get(self, request, project_id, format=None):
         # Keep existing Membership Check
         if not ProjectMember.objects.filter(project_id=project_id, user=request.user).exists():
@@ -683,6 +681,15 @@ class AcceptProjectInvitationView(APIView):
     ENDPOINT 1: For an EXISTING, LOGGED-IN user to accept.
     """
     permission_classes = [IsAuthenticated] # User must be logged in
+
+    if (
+            not request.user.is_super_admin and
+            invitation.project.organization != request.user.organization
+    ):
+        return Response(
+            {"error": "You cannot accept invitations from another organization."},
+            status=status.HTTP_403_FORBIDDEN
+        )
 
     def post(self, request, *args, **kwargs):
         token = request.data.get('token')
