@@ -1,6 +1,7 @@
 from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.utils import timezone
+from django.conf import settings
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from .models import( Epic, Sprint, Ticket, Task,Activity ,Tag,ActivityLog, Status as StatusModel, Goal,FormTemplate)
 from rest_framework import viewsets,status
@@ -19,6 +20,12 @@ from rest_framework.exceptions import PermissionDenied
 from user.models import User
 from .serializers import FormTemplateSerializer, FormSubmissionSerializer,GoalSerializer
 from common.permissions import RBACPermission
+
+from common.utils.email_service import (
+    send_notification_email, 
+    get_stakeholders_emails, 
+    get_all_project_members_emails
+)
 
 
 
@@ -63,12 +70,12 @@ class EpicViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_epic',
-        'list': 'tasks.can_view_all_tasks', # Or create specific 'can_view_epics'
-        'retrieve': 'tasks.can_view_all_tasks',
-        'update': 'tasks.can_edit_epic',
-        'partial_update': 'tasks.can_edit_epic',
-        'destroy': 'tasks.can_delete_epic',
+        'create': 'task.can_create_epic',
+        'list': 'task.can_view_all_tasks', # Or create specific 'can_view_epics'
+        'retrieve': 'task.can_view_all_tasks',
+        'update': 'task.can_edit_epic',
+        'partial_update': 'task.can_edit_epic',
+        'destroy': 'task.can_delete_epic',
     }
     
 
@@ -82,12 +89,39 @@ class EpicViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
         check_project_permission(self.request.user, project)  # Owner/PM only
-        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+        epic = serializer.save(created_by=self.request.user, updated_by=self.request.user)
+
+        recipients = get_all_project_members_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] New Epic Created: {epic.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Epic Created",
+                'message_body': f"A new epic '{epic.name}' has been created.",
+                'details': {'Epic': epic.name, 'Created By': self.request.user.get_full_name()},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/backlog"
+            }
+        )
 
     def perform_update(self, serializer):
         project = serializer.instance.project
         check_project_permission(self.request.user, project)
-        serializer.save(created_by=self.request.user)
+        epic = serializer.save(created_by=self.request.user)
+
+        recipients = get_stakeholders_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] Epic Updated: {epic.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Epic Updated",
+                'message_body': f"Epic '{epic.name}' details were updated.",
+                'details': {'Epic': epic.name, 'Updated By': self.request.user.get_full_name()}
+            }
+        )
+
+
 
 
 
@@ -97,19 +131,20 @@ class SprintViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_sprint',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
-        'update': 'tasks.can_edit_sprint',
-        'partial_update': 'tasks.can_edit_sprint',
-        'destroy': 'tasks.can_delete_sprint', # Make sure to add this to models.py if missing
+        'create': 'task.can_create_sprint',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
+        'update': 'task.can_edit_sprint',
+        'partial_update': 'task.can_edit_sprint',
+        'destroy': 'task.can_delete_sprint', # Make sure to add this to models.py if missing
 
         # Custom Actions
-        'activate': 'tasks.can_start_sprint',
-        'end': 'tasks.can_end_sprint',
-        'check_active_sprint': 'tasks.can_view_all_tasks',
-        'dashboard': 'tasks.can_view_all_tasks',
-        'tickets': 'tasks.can_view_all_tasks',
+        'activate': 'task.can_start_sprint',
+        'end': 'task.can_end_sprint',
+        'check_active_sprint': 'task.can_view_all_tasks',
+        'dashboard': 'task.can_view_all_tasks',
+        'tickets': 'task.can_view_all_tasks',
+        
     }
     def get_queryset(self):
         user = self.request.user
@@ -129,7 +164,21 @@ class SprintViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         project = serializer.validated_data["project"]
         check_project_permission(self.request.user, project)
-        serializer.save(owner=self.request.user)
+        sprint = serializer.save(owner=self.request.user)
+
+        # [EMAIL] New Sprint -> Stakeholders
+        recipients = get_stakeholders_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] New Sprint Created: {sprint.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Sprint Created",
+                'message_body': f"Sprint '{sprint.name}' has been created.",
+                'details': {'Sprint': sprint.name, 'Start Date': str(sprint.start_date), 'End Date': str(sprint.end_date)},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/backlog"
+            }
+        )
 
     def perform_update(self, serializer):
         project = serializer.instance.project
@@ -167,6 +216,20 @@ class SprintViewSet(viewsets.ModelViewSet):
         Sprint.objects.filter(project=sprint.project).update(is_active=False)
         sprint.is_active = True
         sprint.save()
+
+        # [EMAIL] Sprint Started -> All Project Members
+        recipients = get_all_project_members_emails(sprint.project)
+        send_notification_email(
+            subject=f"[{sprint.project.name}] Sprint Started: {sprint.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Sprint Started",
+                'message_body': f"The sprint '{sprint.name}' is now active.",
+                'details': {'Sprint': sprint.name, 'Started By': request.user.get_full_name()},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{sprint.project.id}/board"
+            }
+        )
         return Response({"status": "Sprint activated successfully."}, status=status.HTTP_200_OK)
     
     @action(detail=True, methods=["patch"], url_path='end')
@@ -187,6 +250,20 @@ class SprintViewSet(viewsets.ModelViewSet):
         sprint.is_active = False
         sprint.is_ended = True
         sprint.save()
+
+        # [EMAIL] Sprint Ended -> All Project Members
+        recipients = get_all_project_members_emails(sprint.project)
+        send_notification_email(
+            subject=f"[{sprint.project.name}] Sprint Completed: {sprint.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Sprint Completed",
+                'message_body': f"The sprint '{sprint.name}' has been completed.",
+                'details': {'Sprint': sprint.name, 'Ended By': request.user.get_full_name()},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{sprint.project.id}/reports"
+            }
+        )
         return Response({"status": "Sprint ended successfully."}, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=["get"])
@@ -220,11 +297,11 @@ class TicketViewSet(viewsets.ModelViewSet):
     serializer_class = TicketSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
     perms_map = {
-        'create': 'tasks.can_create_task', # Tickets are small tasks
-        'update': 'tasks.can_edit_tasks',
-        'destroy': 'tasks.can_delete_task',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_create_task', # Tickets are small tasks
+        'update': 'task.can_edit_tasks',
+        'destroy': 'task.can_delete_task',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
     }
 
 
@@ -232,7 +309,21 @@ class TicketViewSet(viewsets.ModelViewSet):
         # Assuming you want to add permission check here as well
         sprint = serializer.validated_data["sprint"]
         check_project_permission(self.request.user, sprint.project)
-        serializer.save()
+        ticket = serializer.save()
+
+        # [EMAIL] New Ticket -> All Members
+        recipients = get_all_project_members_emails(sprint.project)
+        send_notification_email(
+            subject=f"[{sprint.project.name}] New Ticket: {ticket.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Ticket Created",
+                'message_body': f"A new ticket has been added to sprint {sprint.name}.",
+                'details': {'Title': ticket.title, 'Sprint': sprint.name},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{sprint.project.id}/board"
+            }
+        )
     
     def perform_update(self, serializer):
         sprint = serializer.instance.sprint
@@ -251,12 +342,12 @@ class TagViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_tag',
-        'update': 'tasks.can_manage_tags',
-        'partial_update': 'tasks.can_manage_tags',
-        'destroy': 'tasks.can_delete_tag',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_create_tag',
+        'update': 'task.can_manage_tags',
+        'partial_update': 'task.can_manage_tags',
+        'destroy': 'task.can_delete_tag',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
     }
 
     def perform_create(self, serializer):
@@ -286,13 +377,13 @@ class GoalViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_goal',
-        'update': 'tasks.can_edit_goal',
-        'partial_update': 'tasks.can_edit_goal',
-        'destroy': 'tasks.can_delete_goal',
-        'list': 'tasks.can_view_goals',
-        'retrieve': 'tasks.can_view_goals',
-        'my_goals': 'tasks.can_view_goals',
+        'create': 'task.can_create_goal',
+        'update': 'task.can_edit_goal',
+        'partial_update': 'task.can_edit_goal',
+        'destroy': 'task.can_delete_goal',
+        'list': 'task.can_view_goals',
+        'retrieve': 'task.can_view_goals',
+        'my_goals': 'task.can_view_goals',
         'off_track_goals': 'tasks.can_view_goals',
     }    
     
@@ -342,7 +433,7 @@ class GoalViewSet(viewsets.ModelViewSet):
 
         # If user has explicit permission to view all goals (Manager/Owner), show all.
         # Otherwise, filter to goals related to their tasks.
-        if not user.has_perm('tasks.can_view_goals'):
+        if not user.has_perm('task.can_view_goals'):
             queryset = queryset.filter(
                 sprint__sprint_tasks__assignees__user=user
             ).distinct()
@@ -378,7 +469,23 @@ class GoalViewSet(viewsets.ModelViewSet):
              raise serializers.ValidationError({"project": "Project is required."})
 
         check_project_permission(self.request.user, project, allowed_roles=[])
-        serializer.save(project=project)
+        goal =  serializer.save(project=project)
+
+        # [EMAIL] New Goal -> All Members
+        recipients = get_all_project_members_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] New Goal Set: {goal.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Project Goal",
+                'message_body': f"A new goal has been defined by {self.request.user.get_full_name()}.",
+                'details': {'Goal': goal.title, 'Project': project.name},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/goals"
+            }
+        )
+
+
 
     def perform_update(self, serializer):
         project = serializer.instance.project
@@ -398,28 +505,28 @@ class TaskViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_task',
-        'list': 'tasks.can_view_all_tasks', # The queryset handles "view own" fallback
-        'retrieve': 'tasks.can_view_all_tasks',
-        'update': 'tasks.can_edit_tasks',
-        'partial_update': 'tasks.can_edit_tasks',
-        'destroy': 'tasks.can_delete_task',
+        'create': 'task.can_create_task',
+        'list': 'task.can_view_all_tasks', # The queryset handles "view own" fallback
+        'retrieve': 'task.can_view_all_tasks',
+        'update': 'task.can_edit_tasks',
+        'partial_update': 'task.can_edit_tasks',
+        'destroy': 'task.can_delete_task',
 
         # Custom Actions
-        'create_status': 'tasks.can_create_status', # Admin only usually
-        'update_task_status': 'tasks.can_change_status',
-        'update_status': 'tasks.can_change_status',
-        'update_assignees': 'tasks.can_assign_task',
-        'update_description': 'tasks.can_edit_tasks',
-        'update_priority': 'tasks.can_change_priority',
-        'update_due_date': 'tasks.can_set_due_date',
-        'update_story_points': 'tasks.can_edit_story_points',
-        'set_parent_task': 'tasks.can_link_tasks', # or edit_tasks
-        'add_activity': 'tasks.can_add_comment',
-        'update_activity': 'tasks.can_add_comment',
-        'delete_activity': 'tasks.can_add_comment',
-        'sprint': 'tasks.can_move_to_backlog', # Moving task to sprint/backlog
-        'by_status': 'tasks.can_view_all_tasks',
+        'create_status': 'task.can_create_status', # Admin only usually
+        'update_task_status': 'task.can_change_status',
+        'update_status': 'task.can_change_status',
+        'update_assignees': 'task.can_assign_task',
+        'update_description': 'task.can_edit_tasks',
+        'update_priority': 'task.can_change_priority',
+        'update_due_date': 'task.can_set_due_date',
+        'update_story_points': 'task.can_edit_story_points',
+        'set_parent_task': 'task.can_link_tasks', # or edit_tasks
+        'add_activity': 'task.can_add_comment',
+        'update_activity': 'task.can_add_comment',
+        'delete_activity': 'task.can_add_comment',
+        'sprint': 'task.can_move_to_backlog', # Moving task to sprint/backlog
+        'by_status': 'task.can_view_all_tasks',
     }
     def get_queryset(self):
         user = self.request.user
@@ -431,7 +538,7 @@ class TaskViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(project_id=self.kwargs['project_pk'])
 
         # RBAC Visibility Check
-        if user.has_perm('tasks.can_view_all_tasks'):
+        if user.has_perm('task.can_view_all_tasks'):
             return queryset.order_by('-id')
         
         # Restricted view for roles without full view permission
@@ -472,6 +579,25 @@ class TaskViewSet(viewsets.ModelViewSet):
             action_type='CREATE', details={'title': task_instance.title}
         )
 
+        # [EMAIL] New Task -> All Project Members (Requirement: mail to all project members)
+        recipients = get_all_project_members_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] New Task: {task_instance.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Task Created",
+                'message_body': f"A new task has been created by {self.request.user.get_full_name()}.",
+                'details': {
+                    'Task ID': f"TASK-{task_instance.id}",
+                    'Title': task_instance.title,
+                    'Priority': task_instance.priority,
+                    'Project': project.name
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/board?task={task_instance.id}"
+            }
+        )
+
     def perform_update(self, serializer):
         project = serializer.instance.project
         check_project_permission(self.request.user, project, allowed_roles=[])
@@ -481,11 +607,41 @@ class TaskViewSet(viewsets.ModelViewSet):
             project=project, task=updated_instance, user=self.request.user,
             action_type='UPDATE', details={'title': updated_instance.title, 'message': 'Task details were updated.'}
         )
+        # [EMAIL] Task Update (Generic) -> Stakeholders + Assignees
+        recipients = get_stakeholders_emails(project)
+        assignees = updated_instance.assignees.values_list('user__email', flat=True)
+        recipients.extend(assignees)
+        
+        send_notification_email(
+            subject=f"[{project.name}] Task Updated: {updated_instance.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Task Updated",
+                'message_body': f"Task details have been updated by {self.request.user.get_full_name()}.",
+                'details': {'Task': updated_instance.title},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/board?task={updated_instance.id}"
+            }
+        )
 
     def perform_destroy(self, instance):
         check_project_permission(self.request.user, instance.project)
-        instance.delete()
-    
+        task_title = instance.title
+        project = instance.project
+        # [EMAIL] Task Delete -> Stakeholders
+        recipients = get_stakeholders_emails(project)
+        send_notification_email(
+            subject=f"[{project.name}] Task Deleted: {task_title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Task Deleted",
+                'message_body': f"Task '{task_title}' has been permanently deleted by {self.request.user.get_full_name()}.",
+                'details': {'Deleted Task': task_title},
+                'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/board"
+            }
+        )
+        instance.delete()    
     @action(detail=False, methods=['post'], url_path='create-status', permission_classes=[IsAuthenticated, IsAdminUser])
     def create_status(self, request):
         """Usually Admin only, handled by StatusViewSet normally."""
@@ -494,6 +650,31 @@ class TaskViewSet(viewsets.ModelViewSet):
             serializer.save()
             return Response(serializer.data, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    
+    # --- EMAIL HELPER FOR CRITICAL CHANGES ---
+    def notify_critical_change(self, task, change_type, old_val, new_val):
+        """Emails Stakeholders + Assignees about critical changes"""
+        recipients = get_stakeholders_emails(task.project)
+        assignees = task.assignees.values_list('user__email', flat=True)
+        recipients.extend(assignees)
+        
+        send_notification_email(
+            subject=f"[{task.project.name}] {change_type} Changed: {task.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': f"Task {change_type} Update",
+                'message_body': f"The {change_type} for task '{task.title}' was changed.",
+                'details': {
+                    'Task': task.title,
+                    'From': old_val,
+                    'To': new_val,
+                    'Updated By': self.request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{task.project.id}/board?task={task.id}"
+            }
+        )
+
 
     @action(detail=True, methods=['patch'], url_path='status')
     def update_task_status(self, request, pk=None):
@@ -513,6 +694,9 @@ class TaskViewSet(viewsets.ModelViewSet):
                     'message': f"Task status updated to {serializer.validated_data.get('status')}."
                 }
             )
+            # [EMAIL] Status Change
+            self.notify_critical_change(task, "Status", old_status, new_status)
+          
             return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -552,7 +736,37 @@ class TaskViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['patch'], url_path='assignees')
     def update_assignees(self, request, pk=None):
-        return self._update_task_field(request, pk, TaskAssigneesUpdateSerializer)
+        # return self._update_task_field(request, pk, TaskAssigneesUpdateSerializer)
+        # Override to send email to all members
+        task = self.get_object()
+        
+        # Get old assignees to compare (optional, but good for context)
+        # old_names = ", ".join([a.user.get_full_name() for a in task.assignees.all()])
+        
+        response = self._update_task_field(request, pk, TaskAssigneesUpdateSerializer)
+        
+        # Refresh task to get new assignees
+        task.refresh_from_db()
+        new_names = ", ".join([a.user.get_full_name() for a in task.assignees.all()])
+        
+        # [EMAIL] Assignee Change -> All Project Members (Requirement: mail to all project members)
+        recipients = get_all_project_members_emails(task.project)
+        send_notification_email(
+            subject=f"[{task.project.name}] Assignees Changed: {task.title}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Task Assigned",
+                'message_body': f"The assignees for task '{task.title}' have been updated.",
+                'details': {
+                    'Task': task.title,
+                    'Now Assigned To': new_names,
+                    'Updated By': request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{task.project.id}/board?task={task.id}"
+            }
+        )
+        return response
         
     @action(detail=True, methods=['patch'], url_path='description')
     def update_description(self, request, pk=None):
@@ -581,6 +795,9 @@ class TaskViewSet(viewsets.ModelViewSet):
                 action_type='PRIORITY_UPDATE',
                 details={'title': task.title, 'new_priority': str(serializer.validated_data.get('priority'))}
             )
+            # [EMAIL] Priority Change
+            self.notify_critical_change(task, "Priority", old_priority, new_priority)
+            
             return Response(TaskSerializer(task).data, status=status.HTTP_200_OK)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
     
@@ -645,11 +862,11 @@ class StatusViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission] # Replaced HasFullTaskAccess
     
     perms_map = {
-        'create': 'tasks.can_create_status',
-        'update': 'tasks.can_edit_status',
-        'destroy': 'tasks.can_delete_status',
-        'list': 'tasks.can_view_all_tasks', # Or a specific status permission
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_create_status',
+        'update': 'task.can_edit_status',
+        'destroy': 'task.can_delete_status',
+        'list': 'task.can_view_all_tasks', # Or a specific status permission
+        'retrieve': 'task.can_view_all_tasks',
     }
 
 
@@ -662,12 +879,12 @@ class CommentViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission, IsAuthorOrReadOnly]
 
     perms_map = {
-        'create': 'tasks.can_add_comment',
-        'update': 'tasks.can_add_comment', # Logic handled by IsAuthorOrReadOnly too
-        'partial_update': 'tasks.can_add_comment',
-        'destroy': 'tasks.can_add_comment',
-        'list': 'tasks.can_view_all_tasks',
-        'retrieve': 'tasks.can_view_all_tasks',
+        'create': 'task.can_add_comment',
+        'update': 'task.can_add_comment', # Logic handled by IsAuthorOrReadOnly too
+        'partial_update': 'task.can_add_comment',
+        'destroy': 'task.can_add_comment',
+        'list': 'task.can_view_all_tasks',
+        'retrieve': 'task.can_view_all_tasks',
     }
     def get_queryset(self):
         task_pk = self.kwargs['task_pk']
@@ -684,6 +901,28 @@ class CommentViewSet(viewsets.ModelViewSet):
         except ProjectMember.DoesNotExist:
             raise PermissionDenied("You are not a member of this project and cannot comment.")
         serializer.save(author=project_member_author, content_object=task)
+        # [EMAIL] New Comment -> Assignees + Reporter
+        recipients = []
+        # Add Assignees
+        for assignee in task.assignees.all():
+            if assignee.user != self.request.user:
+                recipients.append(assignee.user.email)
+        # Add Reporter
+        if task.reporter and task.reporter.user != self.request.user:
+            recipients.append(task.reporter.user.email)
+        
+        if recipients:
+            send_notification_email(
+                subject=f"[{task.project.name}] New Comment on {task.title}",
+                recipients=recipients,
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "New Comment",
+                    'message_body': f"{self.request.user.get_full_name()} commented on task '{task.title}'.",
+                    'details': {'Task': task.title, 'Comment': serializer.validated_data.get('text', 'Image/File uploaded')},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{task.project.id}/board?task={task.id}"
+                }
+            )
 
 
 
@@ -701,13 +940,13 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'create': 'tasks.can_create_form_template',
-        'update': 'tasks.can_edit_form_template',
-        'partial_update': 'tasks.can_edit_form_template',
-        'destroy': 'tasks.can_delete_form_template',
-        'list': 'tasks.can_view_all_tasks', # Forms are usually visible to team
-        'retrieve': 'tasks.can_view_all_tasks',
-        'submit_form': 'tasks.can_submit_form', # Or can_create_task
+        'create': 'task.can_create_form_template',
+        'update': 'task.can_edit_form_template',
+        'partial_update': 'task.can_edit_form_template',
+        'destroy': 'task.can_delete_form_template',
+        'list': 'task.can_view_all_tasks', # Forms are usually visible to team
+        'retrieve': 'task.can_view_all_tasks',
+        'submit_form': 'task.can_submit_form', # Or can_create_task
     }
     def get_queryset(self):
         # Filter by project from URL
@@ -730,6 +969,20 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
         
         if serializer.is_valid():
             task = serializer.save()
+            
+            # [EMAIL] Form Submitted -> Project Owner (Usually the one who created form/manages project)
+            owner_email = task.project.owner.email
+            send_notification_email(
+                subject=f"[{task.project.name}] New Ticket via Form: {task.title}",
+                recipients=[owner_email],
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "New Form Submission",
+                    'message_body': f"A new task was created via the '{form_template.title}' form.",
+                    'details': {'Task': task.title, 'Form': form_template.title},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{task.project.id}/board?task={task.id}"
+                }
+            )
             
             # --- GET ASSIGNEE NAMES FOR RESPONSE ---
             assigned_people = [

@@ -5,7 +5,9 @@ from rest_framework.exceptions import ValidationError
 from rest_framework.permissions import IsAuthenticated
 from django.utils import timezone
 from django.db.models import Max
+from django.conf import settings
 
+from common.utils.email_service import send_notification_email, get_all_project_members_emails
 
 from task.permissions import IsProjectMember
 from .tasks import execute_test_run  # celery task (see tasks.py)
@@ -53,7 +55,24 @@ class ModuleViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         
-        serializer.save(created_by=self.request.user)
+        module = serializer.save(created_by=self.request.user)
+        # [EMAIL] New Module
+        recipients = get_all_project_members_emails(module.project)
+        send_notification_email(
+            subject=f"[{module.project.name}] New Module: {module.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "New Test Module",
+                'message_body': f"A new test module '{module.name}' has been created.",
+                'details': {
+                    'Module': module.name,
+                    'Description': module.description or "N/A",
+                    'Created By': self.request.user.get_full_name()
+                },
+                'action_url': f"{settings.FRONTEND_URL}/projects/{module.project.id}/tests/modules"
+            }
+        )
     
     def perform_update(self, serializer):
         allowed_fields = {"name", "description", "parent"}
@@ -66,7 +85,19 @@ class ModuleViewSet(viewsets.ModelViewSet):
             raise ValidationError(
                 {"detail": f"You cannot update these fields: {', '.join(disallowed)}"}
             )
-        serializer.save()
+        module = serializer.save()
+        # [EMAIL] Module Updated
+        recipients = get_all_project_members_emails(module.project)
+        send_notification_email(
+            subject=f"[{module.project.name}] Module Updated: {module.name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Module Updated",
+                'message_body': f"The test module '{module.name}' was updated.",
+                'details': {'Module': module.name, 'Updated By': self.request.user.get_full_name()}
+            }
+        )
     
     def destroy(self, request, *args, **kwargs):
         module = self.get_object()
@@ -89,7 +120,25 @@ class ModuleViewSet(viewsets.ModelViewSet):
                 "detail": "Cannot delete module while it still has test suites. "
                           "Delete or move those suites first."
             })
-        return super().destroy(request, *args, **kwargs)
+        # return super().destroy(request, *args, **kwargs)
+        # [EMAIL] Module Deleted
+        project = module.project
+        module_name = module.name
+        recipients = get_all_project_members_emails(project)
+        
+        super().destroy(request, *args, **kwargs)
+
+        send_notification_email(
+            subject=f"[{project.name}] Module Deleted: {module_name}",
+            recipients=recipients,
+            template_path="emails/generic_notification.html",
+            context={
+                'title': "Module Deleted",
+                'message_body': f"The test module '{module_name}' has been deleted.",
+                'details': {'Deleted Module': module_name, 'Deleted By': request.user.get_full_name()}
+            }
+        )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
     @action(detail=False, methods=["get"], url_path="simple-modules-cases")
@@ -116,6 +165,26 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
     queryset = TestSuite.objects.all()
     serializer_class = TestSuiteSerializer
 
+    def perform_create(self, serializer):
+        suite = serializer.save(created_by=self.request.user)
+        # Assuming TestSuite has a link to Project (e.g., via Module or direct FK)
+        # Adjust 'suite.project' if your relationship is suite.module.project
+        project = getattr(suite, 'project', None) or getattr(suite.module, 'project', None)
+        
+        if project:
+            recipients = get_all_project_members_emails(project)
+            send_notification_email(
+                subject=f"[{project.name}] New Test Suite: {suite.name}",
+                recipients=recipients,
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "New Test Suite",
+                    'message_body': f"Test Suite '{suite.name}' created by {self.request.user.get_full_name()}.",
+                    'details': {'Suite': suite.name, 'Module': str(suite.module)},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/tests/suites/{suite.id}"
+                }
+            )
+
     @action(detail=True, methods=["post"])
     def add_case(self, request, pk=None):
         suite = self.get_object()
@@ -124,6 +193,23 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
         serializer = TestCaseSerializer(data=data, context={"request": request})
         serializer.is_valid(raise_exception=True)
         case = serializer.save()
+
+        # [EMAIL] Case Added to Suite
+        project = getattr(suite, 'project', None) or getattr(suite.module, 'project', None)
+        if project:
+            recipients = get_all_project_members_emails(project)
+            send_notification_email(
+                subject=f"[{project.name}] Test Case Added to {suite.name}",
+                recipients=recipients,
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Case Created",
+                    'message_body': f"Test Case '{case.title}' was added to Suite '{suite.name}'.",
+                    'details': {'Case': case.title, 'Suite': suite.name, 'Priority': case.priority},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/tests/cases/{case.id}"
+                }
+            )
+
         return Response(TestCaseSerializer(case).data, status=status.HTTP_201_CREATED)
     
     def perform_update(self, serializer):
@@ -138,7 +224,17 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
             raise ValidationError({
                 "detail": f"You cannot update these fields: {', '.join(disallowed)}"
             })
-        serializer.save()
+        suite = serializer.save()
+
+        # [EMAIL] Suite Update
+        project = getattr(suite, 'project', None) or getattr(suite.module, 'project', None)
+        if project:
+            send_notification_email(
+                subject=f"[{project.name}] Test Suite Updated: {suite.name}",
+                recipients=get_all_project_members_emails(project),
+                template_path="emails/generic_notification.html",
+                context={'title': "Test Suite Updated", 'message_body': f"Suite '{suite.name}' was updated.", 'details': {'Suite': suite.name}}
+            )
     
     def destroy(self, request, *args, **kwargs):
         suite = self.get_object()
@@ -149,13 +245,49 @@ class TestSuiteViewSet(viewsets.ModelViewSet):
                 "detail": "Cannot delete suite while it still has test cases. "
                           "Delete or move those cases first."
             })
+        # [EMAIL] Suite Deleted
+        project = getattr(suite, 'project', None) or getattr(suite.module, 'project', None)
+        if project:
+            recipients = get_all_project_members_emails(project)
+            send_notification_email(
+                subject=f"[{project.name}] Test Suite Deleted: {suite.name}",
+                recipients=recipients,
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Suite Deleted", 
+                    'message_body': f"Test Suite '{suite.name}' was deleted by {request.user.get_full_name()}.",
+                    'details': {'Deleted Suite': suite.name}
+                }
+            )
         return super().destroy(request, *args, **kwargs)
-
 
 
 class TestCaseViewSet(viewsets.ModelViewSet):
     queryset = QaTestCase.objects.all()
     serializer_class = TestCaseSerializer
+
+    def perform_create(self, serializer):
+        case = serializer.save(created_by=self.request.user)
+        # Determine Project from Module
+        project = case.module.project if case.module else None
+        
+        if project:
+            recipients = get_all_project_members_emails(project)
+            send_notification_email(
+                subject=f"[{project.name}] New Test Case: {case.title}",
+                recipients=recipients,
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Case Created",
+                    'message_body': f"A new test case '{case.title}' was created.",
+                    'details': {
+                        'Title': case.title,
+                        'Module': case.module.name,
+                        'Priority': case.priority
+                    },
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/tests/cases/{case.id}"
+                }
+            )
 
     def perform_update(self, serializer):
         # Allow only these fields to be updated
@@ -171,7 +303,39 @@ class TestCaseViewSet(viewsets.ModelViewSet):
             raise ValidationError({
                 "detail": f"You cannot update these fields: {', '.join(disallowed)}"
             })
-        serializer.save()
+        case = serializer.save()
+        # [EMAIL] Case Updated
+        project = case.module.project if case.module else None
+        if project:
+            send_notification_email(
+                subject=f"[{project.name}] Test Case Updated: {case.title}",
+                recipients=get_all_project_members_emails(project),
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Case Updated",
+                    'message_body': f"Test case '{case.title}' was updated.",
+                    'details': {'Case': case.title, 'Updated By': self.request.user.get_full_name()},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/tests/cases/{case.id}"
+                }
+            )
+    def perform_destroy(self, instance):
+        project = instance.module.project if instance.module else None
+        case_title = instance.title
+        instance.delete()
+        
+        if project:
+            send_notification_email(
+                subject=f"[{project.name}] Test Case Deleted: {case_title}",
+                recipients=get_all_project_members_emails(project),
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Case Deleted",
+                    'message_body': f"Test case '{case_title}' was deleted by {self.request.user.get_full_name()}.",
+                    'details': {'Deleted Case': case_title}
+                }
+            )
+
+
 
 
 
@@ -220,7 +384,19 @@ class TestTemplateViewSet(viewsets.ModelViewSet):
         return qs
 
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
+        template = serializer.save(created_by=self.request.user)
+        # [EMAIL] New Template
+        if template.project:
+            send_notification_email(
+                subject=f"[{template.project.name}] New Test Template: {template.name}",
+                recipients=get_all_project_members_emails(template.project),
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "New Test Template",
+                    'message_body': f"A new test template '{template.name}' is available.",
+                    'details': {'Template': template.name, 'Project': template.project.name}
+                }
+            )
 
 class TemplateStepViewSet(viewsets.ModelViewSet):
     queryset = TemplateStep.objects.all().order_by("order", "id")
@@ -238,6 +414,23 @@ class TestPlanViewSet(viewsets.ModelViewSet):
     queryset = TestPlan.objects.all()
     serializer_class = TestPlanSerializer
 
+    def perform_create(self, serializer):
+        plan = serializer.save(created_by=self.request.user)
+        # [EMAIL] New Test Plan
+        if plan.project:
+            send_notification_email(
+                subject=f"[{plan.project.name}] New Test Plan: {plan.name}",
+                recipients=get_all_project_members_emails(plan.project),
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "New Test Plan",
+                    'message_body': f"Test plan '{plan.name}' created.",
+                    'details': {'Plan': plan.name, 'Description': plan.description},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{plan.project.id}/tests/plans/{plan.id}"
+                }
+            )
+
+
 class EnvironmentViewSet(viewsets.ModelViewSet):
     queryset = Environment.objects.all()
     serializer_class = EnvironmentSerializer
@@ -245,6 +438,23 @@ class EnvironmentViewSet(viewsets.ModelViewSet):
 class TestRunViewSet(viewsets.ModelViewSet):
     queryset = TestRun.objects.all().order_by("-created_at")
     serializer_class = TestRunSerializer
+
+    def perform_create(self, serializer):
+        run = serializer.save(created_by=self.request.user)
+        # [EMAIL] Test Run Created
+        project = run.test_plan.project if run.test_plan else None
+        if project:
+            send_notification_email(
+                subject=f"[{project.name}] Test Run Created: {run.name}",
+                recipients=get_all_project_members_emails(project),
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Run Created",
+                    'message_body': f"Test Run '{run.name}' is ready to start.",
+                    'details': {'Run': run.name, 'Plan': run.test_plan.name},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/tests/runs/{run.id}"
+                }
+            )
 
     @action(detail=True, methods=["post"])
     def start(self, request, pk=None):
@@ -257,6 +467,22 @@ class TestRunViewSet(viewsets.ModelViewSet):
         run.save()
         # enqueue background execution (Celery)
         execute_test_run.delay(run.id)
+
+         # [EMAIL] Test Run Started
+        project = run.test_plan.project if run.test_plan else None
+        if project:
+            send_notification_email(
+                subject=f"[{project.name}] Test Run Started: {run.name}",
+                recipients=get_all_project_members_emails(project),
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Run Started",
+                    'message_body': f"Execution for '{run.name}' has started.",
+                    'details': {'Run': run.name, 'Started By': request.user.get_full_name()},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/tests/runs/{run.id}"
+                }
+            )
+
         return Response({"detail": "Run started."})
 
     @action(detail=True, methods=["post"])
@@ -265,6 +491,21 @@ class TestRunViewSet(viewsets.ModelViewSet):
         run.status = "STOPPED"
         run.finished_at = timezone.now()
         run.save()
+
+         # [EMAIL] Test Run Stopped
+        project = run.test_plan.project if run.test_plan else None
+        if project:
+            send_notification_email(
+                subject=f"[{project.name}] Test Run Stopped: {run.name}",
+                recipients=get_all_project_members_emails(project),
+                template_path="emails/generic_notification.html",
+                context={
+                    'title': "Test Run Stopped",
+                    'message_body': f"Execution for '{run.name}' was stopped manually.",
+                    'details': {'Run': run.name, 'Stopped By': request.user.get_full_name()},
+                    'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/tests/runs/{run.id}"
+                }
+            )
         return Response({"detail": "Run stopped."})
 
 class TestExecutionViewSet(viewsets.ReadOnlyModelViewSet):
