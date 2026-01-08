@@ -1,0 +1,21 @@
+from rest_framework import serializers
+from .models import Organization
+from user.models import User
+from project.models import Project
+from django.db.models import Count
+
+class OrganizationSerializer(serializers.ModelSerializer):
+    user_count = serializers.IntegerField(read_only=True)
+    project_count = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "name",
+            "domain",
+            "description",
+            "created_at",
+            "user_count",
+            "project_count",
+        ]

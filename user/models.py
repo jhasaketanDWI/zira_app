@@ -15,7 +15,9 @@ class Invitation(models.Model):
     organization = models.ForeignKey(
         Organization,
         on_delete=models.CASCADE,
-        related_name="invitations"
+        related_name="invitations",
+        null=True,
+        blank=True
     )
     email = models.EmailField()
     role = models.CharField(max_length=50)
