@@ -37,7 +37,7 @@ api_patterns = [
     # App-specific URLs
     path('', include('user.urls')),
     path('', include('task.urls')),
-    path('', include('billing.urls')),
+    path('billing/', include('billing.urls')),
     path('', include('testCase.urls')),
     path('', include('team.urls')),
     path('timeline/', include('timeline.urls')),
@@ -50,10 +50,10 @@ api_patterns = [
     path('', include(pages_router.urls)),
 
 
- # ✨ Task & Forms: /projects/{id}/forms/, /projects/{id}/tasks/, etc.
+ # Task & Forms: /projects/{id}/forms/, /projects/{id}/tasks/, etc.
     path('', include(task_nested_router.urls)),
     
-    # ✨ Tickets: /projects/{id}/sprints/{id}/tickets/
+    # Tickets: /projects/{id}/sprints/{id}/tickets/
     path('', include(sprints_nested_router.urls)),
 
 

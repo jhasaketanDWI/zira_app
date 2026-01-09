@@ -3,6 +3,8 @@ from common.models import AuditBaseModel
 from django.conf import settings
 from django.utils import timezone
 from dateutil.relativedelta import relativedelta
+import datetime
+from decimal import Decimal 
 
 class PricingConfig(AuditBaseModel):
     """
@@ -69,9 +71,9 @@ class Subscription(AuditBaseModel):
         
         # Testcases are sold in blocks (e.g., blocks of 500)
         testcase_units = self.selected_testcases / config.testcase_unit_step
-        testcase_cost = testcase_units * config.price_per_testcase_unit
+        testcase_cost = Decimal(testcase_units) * config.price_per_testcase_unit
 
-        monthly_total = float(user_cost) + float(storage_cost) + float(testcase_cost)
+        monthly_total = user_cost + storage_cost + testcase_cost
 
         if self.billing_cycle == 'YEARLY':
             return monthly_total * 11 # 1 month free
@@ -79,6 +81,8 @@ class Subscription(AuditBaseModel):
         return monthly_total
 
     def save(self, *args, **kwargs):
+        if isinstance(self.start_date, datetime.datetime):
+            self.start_date = self.start_date.date()
         # Auto-set dates if new
         if not self.id:
             if self.billing_cycle == 'FREE_TRIAL':

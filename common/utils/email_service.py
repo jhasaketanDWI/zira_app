@@ -2,32 +2,48 @@ import threading
 from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
-
+from django.core.mail import EmailMultiAlternatives
+from django.utils.html import strip_tags
 class EmailThread(threading.Thread):
-    def __init__(self, subject, recipient_list, html_message):
+    def __init__(self, subject, recipient_list, html_message,bcc=None, cc=None):
         self.subject = subject
         self.recipient_list = recipient_list
         self.html_message = html_message
+        self.bcc = bcc if bcc else []
+        self.cc = cc if cc else []
         threading.Thread.__init__(self)
 
     def run(self):
         try:
-            # Send distinct emails or bulk? 
-            # For "one by one" requirement, we loop. 
-            # For bulk announcements, we usually use bcc, but here we loop to ensure delivery.
-            send_mail(
+            # 1. Create the plain text version (for email clients that block HTML)
+            text_content = strip_tags(self.html_message)
+           # 2. Construct the Email Object
+            msg = EmailMultiAlternatives(
                 subject=self.subject,
-                message="",
+                body=text_content, # Plain text content
                 from_email=settings.EMAIL_HOST_USER,
-                recipient_list=self.recipient_list,
-                html_message=self.html_message,
-                fail_silently=True,
+                to=self.recipient_list, 
+                bcc=self.bcc,           
+                cc=self.cc              
             )
+            # 3. Attach HTML Content
+            msg.attach_alternative(self.html_message, "text/html")
+            
+            # 4. Send
+            msg.send(fail_silently=True)
+            # send_mail(
+            #     subject=self.subject,
+            #     message="",
+            #     from_email=settings.EMAIL_HOST_USER,
+            #     recipient_list=self.recipient_list,
+            #     html_message=self.html_message,
+            #     fail_silently=True,
+            # )
         except Exception as e:
             print(f"Failed to send email: {e}")
 
 
-def send_notification_email(subject, recipients, template_path, context):
+def send_notification_email(subject, recipients, template_path, context,bcc=None, cc=None):
     """
     Standard interface for sending notifications.
     recipients: list of email strings ['a@b.com', 'c@d.com']
@@ -42,7 +58,7 @@ def send_notification_email(subject, recipients, template_path, context):
     valid_recipients = list(set([r for r in recipients if r]))
 
     # Launch Thread
-    EmailThread(subject, valid_recipients, html_content).start()
+    EmailThread(subject, valid_recipients, html_content, bcc=bcc, cc=cc).start()
 
 # --- HELPER method to Get Standard Recipients ---
 def get_stakeholders_emails(project):

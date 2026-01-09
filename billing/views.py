@@ -96,7 +96,7 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
             subject=subject,
             recipients=[user_email], # Main Recipient
             cc=admin_emails,         # Admins get a copy
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': title,
                 'message_body': message,
@@ -140,7 +140,8 @@ class PricingConfigViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated, RBACPermission]
 
     perms_map = {
-        'list': 'billing.manage_pricing_config',   # Define this in your RBAC system
+        'list': 'billing.manage_pricing_config', 
+        'create': 'billing.manage_pricing_config',
         'update': 'billing.manage_pricing_config',
         'partial_update': 'billing.manage_pricing_config',
     }

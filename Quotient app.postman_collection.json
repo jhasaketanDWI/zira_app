@@ -1,14 +1,14 @@
 {
 	"info": {
 		"_postman_id": "1f755ccf-6ab5-4b79-92d5-111de95a9451",
-		"name": "Test-app",
+		"name": "Quotient app",
 		"description": "Complete API collection for the Django project, structured by app.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "34092782"
 	},
 	"item": [
 		{
-			"name": "Authentication",
+			"name": "Authentication & Authorization",
 			"item": [
 				{
 					"name": "OWNER Management",
@@ -621,6 +621,257 @@
 										"auth",
 										"google",
 										""
+									]
+								}
+							},
+							"response": []
+						}
+					]
+				},
+				{
+					"name": "Permissions and Roles",
+					"item": [
+						{
+							"name": "get all permissions",
+							"event": [
+								{
+									"listen": "test",
+									"script": {
+										"exec": [
+											"// Visualization Script",
+											"// Visualization Script",
+											"const template = `",
+											"<style>",
+											"    table {",
+											"        width: 100%;",
+											"        border-collapse: collapse;",
+											"        font-family: Arial, sans-serif;",
+											"        font-size: 14px;",
+											"    }",
+											"    th {",
+											"        background-color: #4a90d9;",
+											"        color: white;",
+											"        padding: 12px 8px;",
+											"        text-align: left;",
+											"        border: 1px solid #ddd;",
+											"    }",
+											"    td {",
+											"        padding: 10px 8px;",
+											"        border: 1px solid #ddd;",
+											"    }",
+											"    tr:nth-child(even) {",
+											"        background-color: #f9f9f9;",
+											"    }",
+											"    tr:hover {",
+											"        background-color: #f1f1f1;",
+											"    }",
+											"</style>",
+											"<table>",
+											"    <thead>",
+											"        <tr>",
+											"            {{#each headers}}",
+											"            <th>{{this}}</th>",
+											"            {{/each}}",
+											"        </tr>",
+											"    </thead>",
+											"    <tbody>",
+											"        {{#each rows}}",
+											"        <tr>",
+											"            {{#each this}}",
+											"            <td>{{this}}</td>",
+											"            {{/each}}",
+											"        </tr>",
+											"        {{/each}}",
+											"    </tbody>",
+											"</table>",
+											"`;",
+											"",
+											"function createPayload() {",
+											"    const response = pm.response.json();",
+											"    ",
+											"    if (!Array.isArray(response) || response.length === 0) {",
+											"        return { headers: [], rows: [] };",
+											"    }",
+											"    ",
+											"    // Get all unique keys from all objects",
+											"    const allKeys = new Set();",
+											"    response.forEach(item => {",
+											"        Object.keys(item).forEach(key => allKeys.add(key));",
+											"    });",
+											"    const headers = Array.from(allKeys);",
+											"    ",
+											"    // Build rows with values for each header",
+											"    const rows = response.map(item => {",
+											"        return headers.map(header => {",
+											"            const value = item[header];",
+											"            if (value === null || value === undefined) {",
+											"                return '';",
+											"            }",
+											"            if (typeof value === 'object') {",
+											"                return JSON.stringify(value);",
+											"            }",
+											"            return String(value);",
+											"        });",
+											"    });",
+											"    ",
+											"    return { headers, rows };",
+											"}",
+											"",
+											"pm.visualizer.set(template, createPayload());"
+										],
+										"type": "text/javascript",
+										"packages": {},
+										"requests": {}
+									}
+								}
+							],
+							"request": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/permissions/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"permissions",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "create role",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"SCRUM_MASTER\",\n    \"permission_ids\": [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]         \n    \n     }",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/roles/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"roles",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "update role",
+							"request": {
+								"method": "PATCH",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"SCRUM_MASTER\"\n    // \"permission_ids\": []\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/roles/{{role_id}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"roles",
+										"{{role_id}}",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "delete a role",
+							"request": {
+								"method": "DELETE",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/roles/{{role_id}}/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"roles",
+										"{{role_id}}",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "get all roles",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}",
+									"options": {
+										"raw": {
+											"language": "text"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/roles/",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"roles",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "get a role by name",
+							"protocolProfileBehavior": {
+								"disableBodyPruning": true
+							},
+							"request": {
+								"method": "GET",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}"
+								},
+								"url": {
+									"raw": "{{baseUrl}}/roles/by-name/?name=SCRUM_MASTER",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"roles",
+										"by-name",
+										""
+									],
+									"query": [
+										{
+											"key": "name",
+											"value": "SCRUM_MASTER"
+										}
 									]
 								}
 							},
@@ -2815,22 +3066,398 @@
 			"name": "Billing",
 			"item": [
 				{
-					"name": "List Subscription Plans",
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/subscription-plans/",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"subscription-plans",
-								""
-							]
+					"name": "1. Admin Configuration",
+					"item": [
+						{
+							"name": "Get Current Pricing Config",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/billing/config/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"config",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Update Base Prices",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"price_per_user\": \"2.00\",\n    \"price_per_gb\": \"0.50\",\n    \"price_per_testcase_unit\": \"1.00\",\n    \"min_users\": 5,\n    \"min_storage_base\": 10,\n    \"storage_per_user_step\": 2,\n    \"testcase_unit_step\": 500\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/billing/config/{{price_config_id}}/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"config",
+										"{{price_config_id}}",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "View Global Revenue (Admin View)",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/billing/reports/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"reports",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "New Request",
+							"request": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\r\n    \"price_per_user\": \"1.00\",\r\n    \"price_per_gb\": \"1.00\",\r\n    \"price_per_testcase_unit\": \"1.00\",\r\n    \"min_users\": 5,\r\n    \"min_storage_base\": 10,\r\n    \"storage_per_user_step\": 2,\r\n    \"testcase_unit_step\": 500\r\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{base_url}}/billing/config/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"config",
+										""
+									]
+								}
+							},
+							"response": []
 						}
-					},
-					"response": []
+					],
+					"description": "Requests that require Admin privileges (Role='ADMIN'). Uses {{admin_token}}."
+				},
+				{
+					"name": "2. Organization Onboarding (Purchase)",
+					"item": [
+						{
+							"name": "Attempt Invalid Plan (Validation Test)",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"billing_cycle\": \"MONTHLY\",\n    \"selected_users\": 6,\n    \"selected_storage_gb\": 12,\n    \"selected_testcases\": 500\n}\n// FAIL EXPECTED: 6 users needs 12GB min storage."
+								},
+								"url": {
+									"raw": "{{base_url}}/billing/subscriptions/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"subscriptions",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Activate  Free Trial",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"billing_cycle\": \"FREE_TRIAL\",\n    \"selected_users\": 5,\n    \"selected_storage_gb\": 10,\n    \"selected_testcases\": 500\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/billing/subscriptions/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"subscriptions",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Buy Premium Monthly Plan",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"billing_cycle\": \"MONTHLY\",\n    \"selected_users\": 10,\n    \"selected_storage_gb\": 50,\n    \"selected_testcases\": 2000\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/billing/subscriptions/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"subscriptions",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Tests for purchasing plans. Uses {{user_token}}."
+				},
+				{
+					"name": "3. Subscription Management",
+					"item": [
+						{
+							"name": "Get My Current Plan",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/billing/subscriptions/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"subscriptions",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Upgrade Plan (Scale Up)",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "PUT",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"billing_cycle\": \"YEARLY\",\n    \"selected_users\": 15,\n    \"selected_storage_gb\": 100,\n    \"selected_testcases\": 5000\n}"
+								},
+								"url": {
+									"raw": "{{base_url}}/billing/subscriptions/{{subscription_id}}/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"subscriptions",
+										"{{subscription_id}}",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Managing active plans. Uses {{user_token}}."
+				},
+				{
+					"name": "4. Finance & Reports",
+					"item": [
+						{
+							"name": "Get Invoice History",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/billing/invoices/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"invoices",
+										""
+									]
+								}
+							},
+							"response": []
+						},
+						{
+							"name": "Get Spending Report (Charts)",
+							"request": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{accessToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{base_url}}/billing/reports/",
+									"host": [
+										"{{base_url}}"
+									],
+									"path": [
+										"billing",
+										"reports",
+										""
+									]
+								}
+							},
+							"response": []
+						}
+					],
+					"description": "Invoices and Charts. Uses {{user_token}}."
 				}
 			],
 			"description": "Admin-only endpoints for managing subscription plans."
@@ -4212,255 +4839,20 @@
 			]
 		},
 		{
-			"name": "Authorization",
-			"item": [
-				{
-					"name": "get all permissions",
-					"event": [
-						{
-							"listen": "test",
-							"script": {
-								"exec": [
-									"// Visualization Script",
-									"// Visualization Script",
-									"const template = `",
-									"<style>",
-									"    table {",
-									"        width: 100%;",
-									"        border-collapse: collapse;",
-									"        font-family: Arial, sans-serif;",
-									"        font-size: 14px;",
-									"    }",
-									"    th {",
-									"        background-color: #4a90d9;",
-									"        color: white;",
-									"        padding: 12px 8px;",
-									"        text-align: left;",
-									"        border: 1px solid #ddd;",
-									"    }",
-									"    td {",
-									"        padding: 10px 8px;",
-									"        border: 1px solid #ddd;",
-									"    }",
-									"    tr:nth-child(even) {",
-									"        background-color: #f9f9f9;",
-									"    }",
-									"    tr:hover {",
-									"        background-color: #f1f1f1;",
-									"    }",
-									"</style>",
-									"<table>",
-									"    <thead>",
-									"        <tr>",
-									"            {{#each headers}}",
-									"            <th>{{this}}</th>",
-									"            {{/each}}",
-									"        </tr>",
-									"    </thead>",
-									"    <tbody>",
-									"        {{#each rows}}",
-									"        <tr>",
-									"            {{#each this}}",
-									"            <td>{{this}}</td>",
-									"            {{/each}}",
-									"        </tr>",
-									"        {{/each}}",
-									"    </tbody>",
-									"</table>",
-									"`;",
-									"",
-									"function createPayload() {",
-									"    const response = pm.response.json();",
-									"    ",
-									"    if (!Array.isArray(response) || response.length === 0) {",
-									"        return { headers: [], rows: [] };",
-									"    }",
-									"    ",
-									"    // Get all unique keys from all objects",
-									"    const allKeys = new Set();",
-									"    response.forEach(item => {",
-									"        Object.keys(item).forEach(key => allKeys.add(key));",
-									"    });",
-									"    const headers = Array.from(allKeys);",
-									"    ",
-									"    // Build rows with values for each header",
-									"    const rows = response.map(item => {",
-									"        return headers.map(header => {",
-									"            const value = item[header];",
-									"            if (value === null || value === undefined) {",
-									"                return '';",
-									"            }",
-									"            if (typeof value === 'object') {",
-									"                return JSON.stringify(value);",
-									"            }",
-									"            return String(value);",
-									"        });",
-									"    });",
-									"    ",
-									"    return { headers, rows };",
-									"}",
-									"",
-									"pm.visualizer.set(template, createPayload());"
-								],
-								"type": "text/javascript",
-								"packages": {},
-								"requests": {}
-							}
-						}
-					],
-					"request": {
-						"method": "GET",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/permissions/",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"permissions",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "create role",
-					"request": {
-						"method": "POST",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"SCRUM_MASTER\",\n    \"permission_ids\": [40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]         \n    \n     }",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/roles/",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"roles",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "update role",
-					"request": {
-						"method": "PATCH",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"SCRUM_MASTER\"\n    // \"permission_ids\": []\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/roles/{{role_id}}/",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"roles",
-								"{{role_id}}",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "delete a role",
-					"request": {
-						"method": "DELETE",
-						"header": [],
-						"url": {
-							"raw": "{{baseUrl}}/roles/{{role_id}}/",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"roles",
-								"{{role_id}}",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "get all roles",
-					"protocolProfileBehavior": {
-						"disableBodyPruning": true
-					},
-					"request": {
-						"method": "GET",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}",
-							"options": {
-								"raw": {
-									"language": "text"
-								}
-							}
-						},
-						"url": {
-							"raw": "{{baseUrl}}/roles/",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"roles",
-								""
-							]
-						}
-					},
-					"response": []
-				},
-				{
-					"name": "get a role by name",
-					"protocolProfileBehavior": {
-						"disableBodyPruning": true
-					},
-					"request": {
-						"method": "GET",
-						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"name\": \"Junior Developer\",\n    \"permission_ids\": [1, 2, 5] \n}"
-						},
-						"url": {
-							"raw": "{{baseUrl}}/roles/by-name/?name=SCRUM_MASTER",
-							"host": [
-								"{{baseUrl}}"
-							],
-							"path": [
-								"roles",
-								"by-name",
-								""
-							],
-							"query": [
-								{
-									"key": "name",
-									"value": "SCRUM_MASTER"
-								}
-							]
-						}
-					},
-					"response": []
-				}
-			]
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
+		},
+		{
+			"name": "New Request",
+			"request": {
+				"method": "GET",
+				"header": []
+			},
+			"response": []
 		}
 	],
 	"auth": {
@@ -4554,6 +4946,21 @@
 		},
 		{
 			"key": "role_name",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "base_url",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "price_config_id",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "subscription_id",
 			"value": "",
 			"type": "default"
 		}
