@@ -1,180 +1,208 @@
-from django.shortcuts import render
-from rest_framework import viewsets, permissions
-from common.utils import get_client_ip
-from common.permissions import RBACPermission
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from .models import SubscriptionPlan, Subscription, Invoice
-from .serializers import SubscriptionPlanSerializer, SubscriptionSerializer, InvoiceSerializer
-from common.utils.email_service import send_notification_email
+from common.permissions import RBACPermission
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncMonth
+from django.contrib.auth import get_user_model
 from django.conf import settings
 
-
-class SubscriptionPlanViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint that allows subscription plans to be viewed or edited.
-    Only admin users can modify subscription plans.
-    """
-    queryset = SubscriptionPlan.objects.all()
-    serializer_class = SubscriptionPlanSerializer
-    # Permissions are set to IsAdminUser, as typically only admins should manage plans.
-    permission_classes = [permissions.IsAdminUser]
-
-    def perform_create(self, serializer):
-        ip = get_client_ip(self.request)
-        # Corrected to use the 'created_by' and 'updated_by' fields from AuditBaseModel.
-        serializer.save(created_by=ip, updated_by=ip)
-
-    def perform_update(self, serializer):
-        ip = get_client_ip(self.request)
-        # Corrected to use the 'updated_by' field.
-        serializer.save(updated_by=ip)
+from .models import Subscription, Invoice, PricingConfig
+from .serializers import (
+    SubscriptionSerializer, 
+    InvoiceSerializer, 
+    PricingConfigSerializer, 
+    BillingReportSerializer
+)
+from common.utils.email_service import send_notification_email
+User = get_user_model()
 
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """
-    API endpoint that allows users to view and manage their own subscriptions.
+    Manages dynamic subscriptions.
+    - Admins: Can see/edit all.
+    - Owners/Scrum Masters: Can view and upgrade their own org's plan.
     """
     serializer_class = SubscriptionSerializer
-    permission_classes = [IsAuthenticated,RBACPermission]
+    permission_classes = [IsAuthenticated, RBACPermission]
+    
+    # NEW PERMISSION MAP (Using the permissions defined in models.py)
     perms_map = {
-        # Viewing subscription details requires permission (usually Owner/Billing Admin)
-        'list': 'billing.can_manage_subscription',
-        'retrieve': 'billing.can_manage_subscription',
+        # 'view_subscription_plan' should be assigned to Owner, Scrum Master, maybe Devs
+        'list': 'billing.view_subscription_plan',
+        'retrieve': 'billing.view_subscription_plan',
         
-        # Creating/Upgrading plans
-        'create': 'billing.can_manage_subscription',
-        'update': 'billing.can_manage_subscription',
-        'partial_update': 'billing.can_manage_subscription',
-        
-        # Canceling subscription
-        'destroy': 'billing.can_manage_subscription',
+        # 'manage_subscription_plan' should only be Owner or Billing Admin
+        'create': 'billing.manage_subscription_plan',
+        'update': 'billing.manage_subscription_plan',
+        'partial_update': 'billing.manage_subscription_plan',
+        'destroy': 'billing.manage_subscription_plan',
     }
 
     def get_queryset(self):
-        """
-        This is a critical security correction.
-        It ensures that users can only view their own subscriptions and not anyone else's.
-        """
-        return Subscription.objects.filter(owner=self.request.user)
+        user = self.request.user
+        # ADMIN OVERRIDE: Admin sees everything
+        if getattr(user, 'role', '') == 'ADMIN' or user.is_staff or user.is_superuser:
+            return Subscription.objects.all()
+        # REGULAR USER: Sees only their own subscription
+        return Subscription.objects.filter(owner=user)
+    def _get_admin_emails(self):
+        """Helper to get all Admin emails for notifications."""
+        admin_user = User.objects.filter(role='ADMIN').first()
+        
+        # Fallback: Try finding a superuser if no role='ADMIN' is found
+        if not admin_user:
+            admin_user = User.objects.filter(is_superuser=True).first()
 
+        if admin_user and admin_user.email:
+            return [admin_user.email] # Return as list for the CC field
+        return []
     def perform_create(self, serializer):
-        ip = get_client_ip(self.request)
-        # The owner is automatically set to the currently logged-in user.
+        # Admin can create for others, but default to self if not specified
         subscription = serializer.save(
             owner=self.request.user,
-            created_by=ip,
-            updated_by=ip,
+            created_by=self.request.user,
+            updated_by=self.request.user
         )
-        # [EMAIL] New Subscription Started
-        send_notification_email(
-            subject=f"Welcome to {subscription.plan.name} Plan",
-            recipients=[self.request.user.email],
-            template_path="emails/generic_notification.html",
-            context={
-                'title': "Subscription Started",
-                'message_body': f"Thank you for subscribing to the {subscription.plan.name} plan.",
-                'details': {
-                    'Plan': subscription.plan.name,
-                    'Start Date': str(subscription.start_date),
-                    'End Date': str(subscription.end_date),
-                    'Status': subscription.status
-                },
-                'action_url': f"{settings.FRONTEND_URL}/billing/subscriptions"
-            }
-        )
+        self._send_subscription_email(subscription, is_new=True)
+        
+
 
     def perform_update(self, serializer):
-        ip = get_client_ip(self.request)
-        subscription = serializer.save(updated_by=ip)
-        
-        # [EMAIL] Subscription Updated
+        subscription = serializer.save(updated_by=self.request.user)
+        self._send_subscription_email(subscription, is_new=False)
+
+    def _send_subscription_email(self, subscription, is_new=False):
+        """
+        Consolidated logic to send emails to User AND Admin.
+        """
+        cost = subscription.calculate_cost()
+        user_email = self.request.user.email
+        admin_emails = self._get_admin_emails() # Fetch Admins
+
+        if is_new:
+            subject = f"Welcome to {subscription.get_billing_cycle_display()}"
+            title = "Subscription Activated"
+            message = f"You have successfully activated the {subscription.get_billing_cycle_display()} plan."
+        else:
+            subject = "Subscription Plan Updated"
+            title = "Plan Resources Updated"
+            message = "Your subscription resources have been adjusted."
+
+        # Send Email (User gets main, Admins get BCC/Copy)
         send_notification_email(
-            subject="Subscription Updated",
-            recipients=[self.request.user.email],
+            subject=subject,
+            recipients=[user_email], # Main Recipient
+            cc=admin_emails,         # Admins get a copy
             template_path="emails/generic_notification.html",
             context={
-                'title': "Subscription Plan Updated",
-                'message_body': "Your subscription details have been updated.",
+                'title': title,
+                'message_body': message,
                 'details': {
-                    'Current Plan': subscription.plan.name,
-                    'Status': subscription.status,
-                    'Updated By': self.request.user.get_full_name()
-                },
-                'action_url': f"{settings.FRONTEND_URL}/billing/subscriptions"
-            }
-        )
-    def perform_destroy(self, instance):
-        # [EMAIL] Subscription Cancelled
-        plan_name = instance.plan.name
-        send_notification_email(
-            subject="Subscription Cancelled",
-            recipients=[self.request.user.email],
-            template_path="emails/generic_notification.html",
-            context={
-                'title': "Subscription Cancelled",
-                'message_body': f"Your subscription to the {plan_name} plan has been cancelled.",
-                'details': {
-                    'Plan': plan_name,
-                    'Cancelled By': self.request.user.get_full_name()
+                    'User': self.request.user.get_full_name(),
+                    'Org': getattr(self.request.user, 'organization_name', 'N/A'),
+                    'Users Count': subscription.selected_users,
+                    'Storage': f"{subscription.selected_storage_gb} GB",
+                    'Testcases': subscription.selected_testcases,
+                    'Cost': "Free" if cost == 0 else f"${cost}",
+                    'Renews On': str(subscription.end_date)
                 },
                 'action_url': f"{settings.FRONTEND_URL}/billing"
             }
         )
-        instance.delete()
-
 
 class InvoiceViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint that allows users to view invoices for their subscriptions.
-    """
     serializer_class = InvoiceSerializer
-    permission_classes = [IsAuthenticated,RBACPermission]
+    permission_classes = [IsAuthenticated, RBACPermission]
+    
     perms_map = {
-        # Viewing invoices
-        'list': 'billing.can_view_all_invoices',
-        'retrieve': 'billing.can_view_all_invoices',
-        
-        # Creating/Editing invoices is typically automated or Admin-only,
-        # but if exposed, it requires high-level billing permissions.
-        'create': 'billing.can_manage_subscription', 
-        'update': 'billing.can_manage_subscription',
-        'partial_update': 'billing.can_manage_subscription',
-        'destroy': 'billing.can_manage_subscription',
+        'list': 'billing.view_invoices',
+        'retrieve': 'billing.view_invoices',
+        # Usually only system/admin creates invoices, but if users can generate them:
+        'create': 'billing.pay_invoice', 
     }
 
     def get_queryset(self):
-        """
-        This is another critical security correction.
-        It ensures users can only see invoices that belong to their subscriptions.
-        """
-        return Invoice.objects.filter(subscription__owner=self.request.user)
+        user = self.request.user
+        if getattr(user, 'role', '') == 'ADMIN' or user.is_staff:
+            return Invoice.objects.all()
+        return Invoice.objects.filter(subscription__owner=user)
+    
 
-    def perform_create(self, serializer):
-        ip = get_client_ip(self.request)
-        invoice = serializer.save(created_by=ip, updated_by=ip)
+class PricingConfigViewSet(viewsets.ModelViewSet):
+    """
+    API for the Admin Panel to manage base prices (e.g., change User cost from $1 to $2).
+    """
+    queryset = PricingConfig.objects.all()
+    serializer_class = PricingConfigSerializer
+    permission_classes = [IsAuthenticated, RBACPermission]
 
-        # [EMAIL] New Invoice Generated
-        # Determine recipient from the related subscription owner
-        recipient_email = invoice.subscription.owner.email
+    perms_map = {
+        'list': 'billing.manage_pricing_config',   # Define this in your RBAC system
+        'update': 'billing.manage_pricing_config',
+        'partial_update': 'billing.manage_pricing_config',
+    }
+
+    def get_queryset(self):
+        # Only fetch the single active config
+        return PricingConfig.objects.all()
+
+    def update(self, request, *args, **kwargs):
+        # Security: Double check it's an ADMIN
+        if getattr(request.user, 'role', '') != 'ADMIN' and not request.user.is_superuser:
+            return Response({"error": "Only Admins can change pricing."}, status=status.HTTP_403_FORBIDDEN)
+        return super().update(request, *args, **kwargs)
+
+
+class BillingReportsViewSet(viewsets.ViewSet):
+    """
+    New Feature: Reports & Analytics
+    Returns aggregated data for frontend charts (Spending over time).
+    """
+    permission_classes = [IsAuthenticated, RBACPermission]
+    perms_map = {
+        'list': 'billing.view_reports', # Usually Owner/Admin
+    }
+
+    def list(self, request):
+        user = request.user
         
-        send_notification_email(
-            subject=f"New Invoice Available: #{invoice.id}",
-            recipients=[recipient_email],
-            template_path="emails/generic_notification.html",
-            context={
-                'title': "Invoice Generated",
-                'message_body': "A new invoice has been generated for your subscription.",
-                'details': {
-                    'Invoice ID': f"#{invoice.id}",
-                    'Amount': f"${invoice.amount}",
-                    'Plan': invoice.subscription.plan.name,
-                    'Date': str(invoice.issue_date)
-                },
-                'action_url': f"{settings.FRONTEND_URL}/billing/invoices/{invoice.id}"
-            }
+        # 1. Admin sees GLOBAL revenue
+        if getattr(user, 'role', '') == 'ADMIN' or user.is_superuser:
+            queryset = Invoice.objects.all()
+        # 2. Users see THEIR spending
+        else:
+            queryset = Invoice.objects.filter(subscription__owner=user)
+
+        # AGGREGATION QUERY: Group invoices by month
+        # Output format: [{month: "2025-01-01", total_spend: 100.00}, ...]
+        report_data = (
+            queryset
+            .annotate(month=TruncMonth('period_start'))
+            .values('month')
+            .annotate(
+                total_spend=Sum('amount'),
+                invoice_count=Count('id')
+            )
+            .order_by('month')
         )
+        
+        # Format for React (Recharts friendly)
+        formatted_data = [
+            {
+                "name": entry['month'].strftime("%b %Y"), # e.g., "Jan 2026"
+                "spend": entry['total_spend'],
+                "invoices": entry['invoice_count']
+            }
+            for entry in report_data
+        ]
 
-    def perform_update(self, serializer):
-        ip = get_client_ip(self.request)
-        serializer.save(updated_by=ip)
-
+        return Response({
+            "chart_data": formatted_data,
+            "summary": {
+                "total_spent_lifetime": sum(item['spend'] for item in formatted_data),
+                "last_month_spend": formatted_data[-1]['spend'] if formatted_data else 0
+            }
+        })
