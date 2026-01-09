@@ -11,7 +11,7 @@ from project.models import ProjectInvitation
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.conf import settings
 from django.core.mail import send_mail
-from common.permissions import IsOwnerUser,IsOwnerAdminOrScrumMaster, IsOwnerOrAdmin,IsOwnerAdminOrManager,IsOwnerAdminOrScrumMasterOrManager,RBACPermission
+from common.permissions import IsOwnerUser,IsOwnerAdminOrScrumMaster, IsOwnerOrAdmin,IsOwnerAdminOrManager,IsOwnerAdminOrScrumMasterOrManager,RBACPermission, IsSuperAdminOrDjangoAdmin
 from django.utils.crypto import get_random_string
 from django.db.models import Q
 from .serializers import(
@@ -160,7 +160,7 @@ class UserViewSet(viewsets.ModelViewSet):
 
 class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
-    permission_classes = [IsAdminUser] # Only admins can access this viewset
+    permission_classes = [IsSuperAdminOrDjangoAdmin] # Only admins can access this viewset
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -196,7 +196,7 @@ class TeamStatsView(APIView):
     permission_classes = [IsAuthenticated, IsOwnerAdminOrScrumMasterOrManager]
     def get(self, request, *args, **kwargs):
         user = request.user
-        if user.role == User.Role.OWNER or user.role == User.Role.ADMIN or user.role == User.Role.SCRUM_MASTER or user.role == User.Role.MANAGER:
+        if user.role == User.Role.OWNER or user.role == User.Role.ADMIN or user.role == User.Role.SCRUM_MASTER:
             # --- Global Stats for Owner/Admin ---
             if user.is_super_admin:
                 total_members = User.objects.filter(is_deleted=False).count()
@@ -233,7 +233,8 @@ class TeamStatsView(APIView):
             try:
                 managed_project_ids = ProjectMember.objects.filter(
                     user=user, 
-                    role="MANAGER"
+                    role="MANAGER",
+                    organization=user.organization,
                 ).values_list('project_id', flat=True)
 
                 if not managed_project_ids:
@@ -245,7 +246,7 @@ class TeamStatsView(APIView):
                         'message': 'This manager is not assigned to any projects.'
                     })
 
-                managed_projects = Project.objects.filter(id__in=managed_project_ids)
+                managed_projects = Project.objects.filter(organization=user.organization, id__in=managed_project_ids)
 
                 active_projects = managed_projects.exclude(
                     status__in=[Project.Status.COMPLETED, Project.Status.ARCHIVED]
@@ -258,6 +259,7 @@ class TeamStatsView(APIView):
 
                 # 5. Get all users who are members of those projects...
                 team_members = User.objects.filter(
+                    organization=user.organization,
                     projectmember__project_id__in=managed_project_ids
                 ).exclude(
                     # ...but are NOT global Admins or Owners
@@ -327,7 +329,7 @@ class UserSoftDeleteAPIView(generics.DestroyAPIView):
     queryset = User.objects.all()
     serializer_class = UserSerializer
     
-    permission_classes = [permissions.IsAdminUser]
+    permission_classes = [IsSuperAdminOrDjangoAdmin]
 
     def destroy(self, request, *args, **kwargs):
         """
@@ -412,7 +414,7 @@ class InviteUserView(generics.CreateAPIView):
     perms_map = {
         'create': 'user.can_invite_users',
 
-    } 
+    }
 
     def perform_create(self, serializer):
         invitation = serializer.save(
@@ -653,17 +655,17 @@ class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
     
     # default permission for standard CRUD is Admin Only
-    permission_classes = [IsAdminUser] 
+    permission_classes = [IsSuperAdminOrDjangoAdmin]
 
     def get_permissions(self):
         """
         Custom permissions:
         - The 'invitable' action is accessible to any logged-in user (IsAuthenticated).
-        - Everything else (Create, Delete, List All) is restricted to Admins (IsAdminUser).
+        - Everything else (Create, Delete, List All) is restricted to Admins (IsSuperAdminOrDjangoAdmin).
         """
         if self.action == 'invitable':
             return [IsAuthenticated()]
-        return [IsAdminUser() or IsOwnerOrAdmin()]
+        return [IsSuperAdminOrDjangoAdmin() or IsOwnerOrAdmin()]
     
     @action(detail=False, methods=['get'], url_path='by-name')
     def get_by_name(self, request):
@@ -747,12 +749,19 @@ class FilteredUserListView(generics.ListAPIView):
             allowed_roles = []
         
         # Start with the base queryset of users in the allowed roles
-        queryset = User.objects.filter(
-            is_deleted=False, 
-            is_active=True, 
-            role__in=allowed_roles,
-            organization=requesting_user.organization
-        )
+        if requesting_user.is_super_admin:
+            queryset = User.objects.filter(
+                is_deleted=False,
+                is_active=True,
+                role__in=allowed_roles,
+            )
+        else:
+            queryset = User.objects.filter(
+                is_deleted=False,
+                is_active=True,
+                role__in=allowed_roles,
+                organization=requesting_user.organization
+            )
 
         # Apply the optional role filter from the query parameter
         role_filter = self.request.query_params.get('role', None)

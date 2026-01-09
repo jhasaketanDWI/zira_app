@@ -27,10 +27,25 @@ class InvitationSerializer(serializers.ModelSerializer):
         return value
 
     def validate_role(self, value):
-        # Ensure owner cannot invite another owner or admin
-        if value in [User.Role.ADMIN, User.Role.OWNER]:
-            raise serializers.ValidationError("Owners cannot invite Admins or other Owners.")
-        return value
+        inviter = self.context["request"].user
+
+        # SUPER ADMIN can invite any role
+        if inviter.is_super_admin:
+            return value
+
+        # OWNER can invite only downwards
+        if inviter.role == User.Role.OWNER:
+            if value in [User.Role.OWNER, User.Role.ADMIN]:
+                raise serializers.ValidationError("Owners cannot invite Admins or other Owners.")
+            return value
+
+        # MANAGER can invite only developers/testers
+        if inviter.role == User.Role.MANAGER:
+            if value not in [User.Role.DEVELOPER, User.Role.TESTER]:
+                raise serializers.ValidationError("Managers may only invite Developers or Testers.")
+            return value
+
+        raise serializers.ValidationError("You do not have permission to invite users.")
 
 # Serializer for a new user to set their password
 class SetPasswordSerializer(serializers.Serializer):

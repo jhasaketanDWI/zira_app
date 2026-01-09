@@ -47,18 +47,22 @@ class CustomUserManager(BaseUserManager,SoftDeleteManager):
 
     def create_superuser(self, email, password, **extra_fields):
         extra_fields.setdefault('is_staff', True)
-        extra_fields.setdefault('role', 'OWNER')
-        extra_fields.setdefault('is_super_admin', True)
-        extra_fields.setdefault('organization', None)
+        extra_fields.setdefault('is_superuser', True)
         extra_fields.setdefault('is_active', True)
-        extra_fields.setdefault('role', 'OWNER')  # Default role for superuser
+
+        # Assign correct platform-specific role
+        extra_fields.setdefault('role', User.Role.ADMIN)  # or SUPER_ADMIN if you add that
+        extra_fields.setdefault('is_super_admin', True)
+
+        # Super admin should not belong to any organization
+        extra_fields.setdefault('organization', None)
 
         if extra_fields.get('is_staff') is not True:
             raise ValueError('Superuser must have is_staff=True.')
         if extra_fields.get('is_superuser') is not True:
             raise ValueError('Superuser must have is_superuser=True.')
-        return self.create_user(email, password, **extra_fields)
 
+        return self.create_user(email, password, **extra_fields)
 
 class User(AbstractUser, AuditBaseModel, SoftDeleteModel):
     class Meta:

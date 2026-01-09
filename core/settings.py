@@ -166,7 +166,7 @@ DATABASES = {
         'NAME': 'jira_app',
         'HOST': 'localhost',
         'USER': 'root',
-        'PASSWORD': 'Mipaltan@10',
+        'PASSWORD': 'root',
     }
 }
 

@@ -15,6 +15,8 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "name",
             "domain",
             "description",
+            "is_active",
+            "is_protected",
             "created_at",
             "user_count",
             "project_count",

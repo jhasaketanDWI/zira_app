@@ -40,6 +40,7 @@ api_patterns = [
     path('', include('billing.urls')),
     path('', include('testCase.urls')),
     path('', include('team.urls')),
+    path('', include('organizations.urls')),
     path('timeline/', include('timeline.urls')),
     
     
