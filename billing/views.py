@@ -165,6 +165,8 @@ class BillingReportsViewSet(viewsets.ViewSet):
     perms_map = {
         'list': 'billing.view_reports', # Usually Owner/Admin
     }
+    # This line tells Swagger/API docs what the response looks like
+    serializer_class = BillingReportSerializer 
 
     def list(self, request):
         user = request.user
@@ -177,7 +179,6 @@ class BillingReportsViewSet(viewsets.ViewSet):
             queryset = Invoice.objects.filter(subscription__owner=user)
 
         # AGGREGATION QUERY: Group invoices by month
-        # Output format: [{month: "2025-01-01", total_spend: 100.00}, ...]
         report_data = (
             queryset
             .annotate(month=TruncMonth('period_start'))
@@ -189,20 +190,29 @@ class BillingReportsViewSet(viewsets.ViewSet):
             .order_by('month')
         )
         
-        # Format for React (Recharts friendly)
-        formatted_data = [
+        # 3. PREPARE DATA FOR SERIALIZER
+        # We map the database results to the exact field names defined in serializers.py
+        data_for_serializer = [
             {
-                "name": entry['month'].strftime("%b %Y"), # e.g., "Jan 2026"
-                "spend": entry['total_spend'],
-                "invoices": entry['invoice_count']
+                "month": entry['month'].strftime("%b %Y"), # Matches 'month' CharField
+                "total_spend": entry['total_spend'],       # Matches 'total_spend' DecimalField
+                "invoice_count": entry['invoice_count']    # Matches 'invoice_count' IntegerField
             }
             for entry in report_data
         ]
 
+        # 4. VALIDATE & SERIALIZE
+        serializer = BillingReportSerializer(data=data_for_serializer, many=True)
+        serializer.is_valid(raise_exception=True) # Ensures data types are correct
+
+        # 5. RETURN RESPONSE
+        # Note: We calculate summary from the serialized data to be safe
+        serialized_data = serializer.data
+        
         return Response({
-            "chart_data": formatted_data,
+            "chart_data": serialized_data,
             "summary": {
-                "total_spent_lifetime": sum(item['spend'] for item in formatted_data),
-                "last_month_spend": formatted_data[-1]['spend'] if formatted_data else 0
+                "total_spent_lifetime": sum(float(item['total_spend']) for item in serialized_data),
+                "last_month_spend": serialized_data[-1]['total_spend'] if serialized_data else 0
             }
         })
