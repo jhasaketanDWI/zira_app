@@ -4,6 +4,8 @@ from .models import User, Invitation
 from django.utils import timezone
 import pytz
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from organizations.serializers import OrganizationSerializer
+
 class InvitationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Invitation
@@ -131,11 +133,12 @@ class UserSerializer(serializers.ModelSerializer):
     """
 
     last_login = serializers.SerializerMethodField()
+    organization = OrganizationSerializer(read_only=True)
 
     class Meta:
         model = User
         manager_name = 'objects'
-        fields = ('id', 'email', 'first_name', 'last_name','phone' ,'is_active','role','last_login','is_deleted', 'deleted_at')
+        fields = ['id', 'email', 'organization', 'first_name', 'last_name', 'phone', 'is_active', 'role', 'last_login', 'is_deleted', 'deleted_at']
         read_only_fields = (['id','is_deleted', 'deleted_at'])
     
     def get_last_login(self, obj):

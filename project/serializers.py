@@ -9,6 +9,7 @@ from .models import (
 from user.models import User
 from task.serializers import TaskSerializer, TicketSerializer, EpicSerializer, SprintSerializer
 from task.models import Ticket
+from organizations.serializers import OrganizationSerializer
 
 class _UserNestedSerializer(serializers.ModelSerializer):
     """A lightweight, read-only serializer for displaying user details."""
@@ -94,9 +95,10 @@ class ProjectSerializer(serializers.ModelSerializer):
         allow_null=True,
         help_text="ID of the user (with a global 'MANAGER' role) to be assigned as the Project Manager upon creation."
     )
+    organization = OrganizationSerializer(read_only=True)
     class Meta:
         model = Project
-        fields = ["id", "name", "description", "status", "owner","project_manager_id", "created_at", "updated_at"]
+        fields = ["id", "name", "description", "status", "organization", "owner", "project_manager_id", "created_at", "updated_at"]
         read_only_fields = ["owner"]
 
     def create(self, validated_data):
