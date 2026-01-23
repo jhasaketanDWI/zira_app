@@ -30,6 +30,9 @@ MEDIA_URL = "/media/"
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-$cmg#q&j=bu096yk(6+a-1*1haq=m45kx3lcfr8miio!k_-a)x'
 
+# AI API key
+LAMA_API_KEY = "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"
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -97,7 +100,6 @@ INSTALLED_APPS = [
 
 
 AUTH_USER_MODEL = 'user.User'
-FRONTEND_URL = "http://localhost:8080"
 
 
 MIDDLEWARE = [

@@ -22,12 +22,12 @@ class Module(AuditBaseModel):
     description = models.TextField(blank=True)
     
     class Meta:
-        unique_together = ("project", "parent", "name")
         ordering = ("project", "parent__id", "name")
         permissions = [
             ("can_create_module", "User can create new test modules"),
             ("can_edit_module", "User can edit module details"),
             ("can_delete_module", "User can delete modules"),
+            ("can_view_all_module","User can view all modules in a project"),
         ]
 
     def __str__(self):
@@ -49,9 +49,11 @@ class TestTemplate(AuditBaseModel):
     is_active = models.BooleanField(default=True)
 
     class Meta:
-        unique_together = ("project", "name")
         permissions = [
-            ("can_manage_test_templates", "User can create, edit, and delete test templates"),
+            ("can_create_testTemplate", "User can create new template for testcase"),
+            ("can_edit_testTemplate", "User can edit template details"),
+            ("can_delete_testTemplate", "User can delete template"),
+            ("can_view_all_testTemplate","User can view all template in a project"),
         ]
 
     def __str__(self):
@@ -75,6 +77,12 @@ class TemplateStep(models.Model):
 
     class Meta:
         ordering = ["order"]
+        permissions = [
+            ("can_create_template_steps", "User can create new step for a template"),
+            ("can_edit_template_steps", "User can edit steps of a template"),
+            ("can_delete_template_steps", "User can delete steps"),
+            ("can_view_all_template_steps","User can view all steps of a template of a project"),
+        ]
 
     def __str__(self):
         return f"{self.template.name} - Template Step {self.order}"
@@ -85,32 +93,45 @@ class TestSuite(AuditBaseModel):
         ("automation", "Automation"),
         ("manual", "Manual"),
     ]
-    module = models.ForeignKey(Module, related_name="suites", on_delete=models.CASCADE)
+    class Status(models.TextChoices):
+        DRAFT = "DRAFT", "Draft"
+        ACTIVE = "ACTIVE", "Active"
+        IN_PROGRESS = "IN_PROGRESS", "In Progress"
+        COMPLETED = "COMPLETED", "Completed"
+        ARCHIVED = "ARCHIVED", "Archived"
+        NOT_EXECUTED="NOT_EXECUTED", "Not_executed"
+
+    project = models.ForeignKey(Project,related_name="suites",on_delete=models.CASCADE)
     name = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     suite_type = models.CharField(max_length=20, choices=SUITE_TYPE_CHOICES, default="manual")
-
+    cases = models.ManyToManyField("QaTestCase",related_name="suites")
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_EXECUTED)
+    last_executed_on = models.DateTimeField(null=True,blank=True)
+    
     class Meta:
-        unique_together = ("module", "name")
-        permissions = [
+            permissions = [
             ("can_create_suite", "User can create test suites"),
             ("can_edit_suite", "User can edit test suites"),
             ("can_delete_suite", "User can delete test suites"),
+            ("can_view_all_suites","User can view all suits of a project"),
+            ("can_add_testcases","User can add testcasses to suit")
         ]
 
     def __str__(self):
-        return f"{self.module} :: {self.name}"
+        return f"{self.project} :: {self.name}"
     
 
 class QaTestCase(AuditBaseModel):
     class Meta:
          permissions = [
             ("can_create_testcase", "User can create new test case definitions"),
-            ("can_edit_testcase", "User can edit test case details"),
+            ("can_edit_testcases", "User can edit test case details"),
             ("can_run_testcases", "User can run a test and report the pass/fail status"),
-            ("can_link_test_to_task", "User can link a test case to a requirement (Task)"),
             ("can_manage_test_steps", "User can create and update Test Steps"),
             ("can_delete_testcase", "User can delete test cases"),
+            ("can_view_all_testcases","User can view all testcase of a module"),
+            ("can_edit_parent_module","can change module of a testcase"),
         ]
     class Priority(models.TextChoices):
         LOWEST = 'LOWEST', 'Lowest'
@@ -123,8 +144,13 @@ class QaTestCase(AuditBaseModel):
         FUNCTIONAL = 'FUNCTIONAL', 'Functional'
         SMOKE = 'SMOKE', 'Smoke'
         REGRESSION = 'REGRESSION', 'Regression'
+        NEGATIVE = 'NEGATIVE', 'Negative'
+        SECURITY = 'SECURITY', 'Security'
+        VALIDATION = 'VALIDATION', 'Validation'
+        EDGE = 'EDGE', 'Edge Case'
         PERFORMANCE = 'PERFORMANCE', 'Performance'
         INTEGRATION = 'INTEGRATION', 'Integration'
+        USABILITY = 'USABILITY', 'Usability'
 
     class Status(models.TextChoices):
         PASSED = 'PASSED', 'Passed'
@@ -140,7 +166,6 @@ class QaTestCase(AuditBaseModel):
         MINOR = 'MINOR', 'Minor' 
 
     template = models.ForeignKey(TestTemplate,null=True,blank=True,on_delete=models.SET_NULL,related_name="cases",)
-    suite = models.ForeignKey(TestSuite, related_name="cases", on_delete=models.CASCADE)
     labels = models.CharField(max_length=20, choices=Labels.choices, default=Labels.FUNCTIONAL)
     severity = models.CharField(max_length=20, choices=Severity.choices, default=Severity.MINOR)
     status = models.CharField(max_length=20, choices=Status.choices, default=Status.NOT_EXECUTED)
@@ -152,7 +177,7 @@ class QaTestCase(AuditBaseModel):
         Module,
         on_delete=models.CASCADE,
         related_name='testcases',
-        null=True, blank=True
+        null=True,blank=True
     )
 
     # optional: an NLP/scriptless description field
@@ -171,6 +196,13 @@ class TestStep(models.Model):
 
     class Meta:
         ordering = ["order"]
+        permissions = [
+            ("can_manage_step", "User can create, edit and delete testcase steps "),
+            ("can_create_steps", "User can create test steps"),
+            ("can_edit_steps", "User can edit test steps"),
+            ("can_delete_steps", "User can delete test steps"),
+            ("can_view_all_steps","User can view all steps of a testcase"),
+        ]
 
     def __str__(self):
         return f"{self.case.title} - Step {self.order}"
@@ -256,27 +288,5 @@ class TestExecution(models.Model):
         return None
 
 
-
-
-
-
-
-# class AutomationScript(AuditBaseModel):
-#     class Framework(models.TextChoices):
-#         SELENIUM = 'SELENIUM', 'Selenium'
-#         PLAYWRIGHT = 'PLAYWRIGHT', 'Playwright'
-#         CYPRESS = 'CYPRESS', 'Cypress'
-
-#     class Status(models.TextChoices):
-#         PENDING = 'PENDING', 'Pending'
-#         IN_PROGRESS = 'IN_PROGRESS', 'In Progress'
-#         FAILED = 'FAILED', 'Failed'
-#         READY = 'READY', 'Ready'
-
-#     test_case = models.ForeignKey(TestCase, on_delete=models.CASCADE, related_name='scripts')
-#     language = models.CharField(max_length=50)
-#     framework = models.CharField(max_length=20, choices=Framework.choices)
-#     script_content = models.TextField()
-#     status = models.CharField(max_length=20, choices=Status.choices, default=Status.PENDING)
 
 
