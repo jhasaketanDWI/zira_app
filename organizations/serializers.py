@@ -21,3 +21,11 @@ class OrganizationSerializer(serializers.ModelSerializer):
             "user_count",
             "project_count",
         ]
+
+    def update(self, instance, validated_data):
+        user = self.context["request"].user
+
+        if not user.is_super_admin:
+            validated_data.pop("is_protected", None)
+
+        return super().update(instance, validated_data)

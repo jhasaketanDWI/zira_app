@@ -5,6 +5,57 @@ from django.utils import timezone
 import pytz
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from organizations.serializers import OrganizationSerializer
+from organizations.models import Organization
+
+class OwnerSignupWithOrganizationSerializer(serializers.Serializer):
+    """
+    Signup flow for first-time users who create their own organization.
+    Only organization name + domain are accepted at creation time.
+    """
+
+    # User fields
+    email = serializers.EmailField()
+    password = serializers.CharField(write_only=True)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+
+    # Organization fields (INTENTIONALLY LIMITED)
+    organization_name = serializers.CharField()
+    organization_domain = serializers.CharField()
+
+    def validate_organization_domain(self, value):
+        # Optional: normalize domain input
+        return value.lower().strip()
+
+    def create(self, validated_data):
+        # -------------------------------
+        # FUTURE ENFORCEMENT POINT
+        # -------------------------------
+        # NOTE:
+        # If we ever want to restrict one OWNER to one organization,
+        # this is the exact place to enforce it.
+        # Example (NOT enforced now):
+        #
+        # if User.objects.filter(email=validated_data["email"], role=User.Role.OWNER).exists():
+        #     raise serializers.ValidationError("Owner already has an organization.")
+
+        org = Organization.objects.create(
+            name=validated_data.pop("organization_name"),
+            domain=validated_data.pop("organization_domain"),
+            # description is intentionally NOT set here
+        )
+
+        user = User.objects.create_user(
+            email=validated_data["email"],
+            password=validated_data["password"],
+            first_name=validated_data.get("first_name", ""),
+            last_name=validated_data.get("last_name", ""),
+            role=User.Role.OWNER,          # Auto-assign OWNER
+            organization=org,              # Link to created org
+        )
+
+        return user
+
 
 class InvitationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -54,9 +105,6 @@ class SetPasswordSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, required=True, style={'input_type': 'password'})
     token = serializers.UUIDField(required=True)
 
-
-from rest_framework import serializers
-from django.contrib.auth.models import Group, Permission
 
 class PermissionSerializer(serializers.ModelSerializer):
     """

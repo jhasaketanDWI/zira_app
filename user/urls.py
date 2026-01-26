@@ -1,31 +1,31 @@
 from rest_framework_nested import routers
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
-from .views import(
-     UserViewSet,
-     AdminUserViewSet,
-     GoogleLogin,
-     UserSignUpView,
+from .views import (
+    UserViewSet,
+    AdminUserViewSet,
+    GoogleLogin,
+    UserSignUpView,
     AdminSignUpView,
     MyTokenObtainPairView,
     LogoutView,
     TeamStatsView,
     UserSoftDeleteAPIView,
     InviteUserView,
-    SetPasswordView, 
+    SetPasswordView,
     UserRoleUpdateView,
     FilteredUserListView,
     ManagerTeamListView,
     CurrentUserView,
     RoleViewSet,
     PermissionViewSet,
-    )
+    OwnerSignupWithOrganizationView,
+)
 
 from rest_framework_simplejwt.views import (
     TokenObtainPairView,
     TokenRefreshView,
 )
-
 
 router = DefaultRouter()
 router.register(r'roles', RoleViewSet, basename='roles')
@@ -35,25 +35,23 @@ router.register(r'permissions', PermissionViewSet, basename='permissions')
 router.register(r'users', UserViewSet, basename='user')
 router.register(r'admin/users', AdminUserViewSet, basename='admin-user')
 
-
 # The API URLs are now determined automatically by the router.
 urlpatterns = [
 
     # Custom signup endpoints
     path('signup/user/', UserSignUpView.as_view(), name='user-signup'),
     path('signup/admin/', AdminSignUpView.as_view(), name='admin-signup'),
+    path("signup/owner/", OwnerSignupWithOrganizationView.as_view(), name="owner-signup"),
 
     path('admin/users/me/', CurrentUserView.as_view(), name='admin-me'),
     path('users/me/', CurrentUserView.as_view(), name='user-me'),
-    
-   # JWT Authentication endpoints
-    path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'), 
-    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    
-    
-    path('logout/', LogoutView.as_view(), name='logout'), 
-    path('user/<int:pk>/delete/', UserSoftDeleteAPIView.as_view(), name='user-soft-delete-api'),
 
+    # JWT Authentication endpoints
+    path('token/', MyTokenObtainPairView.as_view(), name='token_obtain_pair'),
+    path('token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+
+    path('logout/', LogoutView.as_view(), name='logout'),
+    path('user/<int:pk>/delete/', UserSoftDeleteAPIView.as_view(), name='user-soft-delete-api'),
 
     # Google OAuth API (token-based)
     path('auth/google/', GoogleLogin.as_view(), name='google_login'),

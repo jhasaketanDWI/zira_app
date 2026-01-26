@@ -20,7 +20,7 @@ from .serializers import(
      AdminSignUpSerializer,
      AdminUserManagementSerializer,
      InvitationSerializer, SetPasswordSerializer, UserRoleSerializer,
-     RoleSerializer, PermissionSerializer
+     RoleSerializer, PermissionSerializer, OwnerSignupWithOrganizationSerializer
      )
 from project.models import Project, ProjectMember
 from django.contrib.auth.models import Permission, Group
@@ -156,6 +156,22 @@ class UserViewSet(viewsets.ModelViewSet):
         return Response({'status': 'user activated'})
 
 
+class OwnerSignupWithOrganizationView(APIView):
+    """
+    Public endpoint for first-time users to sign up and create an organization.
+    """
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        serializer = OwnerSignupWithOrganizationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user = serializer.save()
+
+        return Response(
+            UserSerializer(user).data,
+            status=status.HTTP_201_CREATED
+        )
 
 
 class AdminUserViewSet(viewsets.ModelViewSet):
