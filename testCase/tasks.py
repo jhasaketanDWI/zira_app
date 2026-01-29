@@ -3,7 +3,7 @@ from celery import shared_task
 from django.conf import settings
 from django.utils import timezone
 
-from jira_app.common.utils.email_service import get_stakeholders_emails, send_notification_email
+from common.utils.email_service import get_stakeholders_emails, send_notification_email
 from .models import TestRun, TestExecution
 import time
 import traceback

@@ -94,14 +94,14 @@ class EpicDateUpdateView(BaseDateUpdateView):
         # Notify Project Stakeholders (Owner, Admin, Managers)
         recipients = get_stakeholders_emails(epic.project)
         send_notification_email(
-            subject=f"[{epic.project.name}] Timeline Update: {epic.name}",
+            subject=f"[{epic.project.name}] Timeline Update: {epic.title}",
             recipients=recipients,
             template_path="emails/notification.html",
             context={
                 'title': "Epic Timeline Updated",
-                'message_body': f"The timeline for Epic '{epic.name}' has been updated.",
+                'message_body': f"The timeline for Epic '{epic.title}' has been updated.",
                 'details': {
-                    'Epic': epic.name,
+                    'Epic': epic.title,
                     'New Start': str(epic.start_date),
                     'New End': str(epic.end_date),
                     'Updated By': self.request.user.get_full_name()

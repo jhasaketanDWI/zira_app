@@ -93,13 +93,13 @@ class EpicViewSet(viewsets.ModelViewSet):
 
         recipients = get_all_project_members_emails(project)
         send_notification_email(
-            subject=f"[{project.name}] New Epic Created: {epic.name}",
+            subject=f"[{project.name}] New Epic Created: {epic.title}",
             recipients=recipients,
             template_path="emails/notification.html",
             context={
                 'title': "New Epic Created",
-                'message_body': f"A new epic '{epic.name}' has been created.",
-                'details': {'Epic': epic.name, 'Created By': self.request.user.get_full_name()},
+                'message_body': f"A new epic '{epic.title}' has been created.",
+                'details': {'Epic': epic.title, 'Created By': self.request.user.get_full_name()},
                 'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}/backlog"
             }
         )
@@ -111,13 +111,13 @@ class EpicViewSet(viewsets.ModelViewSet):
 
         recipients = get_stakeholders_emails(project)
         send_notification_email(
-            subject=f"[{project.name}] Epic Updated: {epic.name}",
+            subject=f"[{project.name}] Epic Updated: {epic.title}",
             recipients=recipients,
             template_path="emails/notification.html",
             context={
                 'title': "Epic Updated",
-                'message_body': f"Epic '{epic.name}' details were updated.",
-                'details': {'Epic': epic.name, 'Updated By': self.request.user.get_full_name()}
+                'message_body': f"Epic '{epic.title}' details were updated.",
+                'details': {'Epic': epic.title, 'Updated By': self.request.user.get_full_name()}
             }
         )
 
