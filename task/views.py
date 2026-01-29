@@ -95,7 +95,7 @@ class EpicViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] New Epic Created: {epic.name}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Epic Created",
                 'message_body': f"A new epic '{epic.name}' has been created.",
@@ -113,7 +113,7 @@ class EpicViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] Epic Updated: {epic.name}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Epic Updated",
                 'message_body': f"Epic '{epic.name}' details were updated.",
@@ -171,7 +171,7 @@ class SprintViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] New Sprint Created: {sprint.name}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Sprint Created",
                 'message_body': f"Sprint '{sprint.name}' has been created.",
@@ -222,7 +222,7 @@ class SprintViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{sprint.project.name}] Sprint Started: {sprint.name}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Sprint Started",
                 'message_body': f"The sprint '{sprint.name}' is now active.",
@@ -256,7 +256,7 @@ class SprintViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{sprint.project.name}] Sprint Completed: {sprint.name}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Sprint Completed",
                 'message_body': f"The sprint '{sprint.name}' has been completed.",
@@ -316,7 +316,7 @@ class TicketViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{sprint.project.name}] New Ticket: {ticket.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Ticket Created",
                 'message_body': f"A new ticket has been added to sprint {sprint.name}.",
@@ -476,7 +476,7 @@ class GoalViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] New Goal Set: {goal.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Project Goal",
                 'message_body': f"A new goal has been defined by {self.request.user.get_full_name()}.",
@@ -584,7 +584,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] New Task: {task_instance.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Task Created",
                 'message_body': f"A new task has been created by {self.request.user.get_full_name()}.",
@@ -615,7 +615,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] Task Updated: {updated_instance.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Task Updated",
                 'message_body': f"Task details have been updated by {self.request.user.get_full_name()}.",
@@ -633,7 +633,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] Task Deleted: {task_title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Task Deleted",
                 'message_body': f"Task '{task_title}' has been permanently deleted by {self.request.user.get_full_name()}.",
@@ -661,7 +661,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{task.project.name}] {change_type} Changed: {task.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': f"Task {change_type} Update",
                 'message_body': f"The {change_type} for task '{task.title}' was changed.",
@@ -754,7 +754,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{task.project.name}] Assignees Changed: {task.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Task Assigned",
                 'message_body': f"The assignees for task '{task.title}' have been updated.",
@@ -787,6 +787,8 @@ class TaskViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['patch'], url_path='priority')
     def update_priority(self, request, pk=None):
         task = self.get_object()
+        old_priority = task.priority
+        new_priority = request.data.get('priority')
         serializer = TaskPriorityUpdateSerializer(task, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -915,7 +917,7 @@ class CommentViewSet(viewsets.ModelViewSet):
             send_notification_email(
                 subject=f"[{task.project.name}] New Comment on {task.title}",
                 recipients=recipients,
-                template_path="emails/generic_notification.html",
+                template_path="emails/notification.html",
                 context={
                     'title': "New Comment",
                     'message_body': f"{self.request.user.get_full_name()} commented on task '{task.title}'.",
@@ -975,7 +977,7 @@ class FormTemplateViewSet(viewsets.ModelViewSet):
             send_notification_email(
                 subject=f"[{task.project.name}] New Ticket via Form: {task.title}",
                 recipients=[owner_email],
-                template_path="emails/generic_notification.html",
+                template_path="emails/notification.html",
                 context={
                     'title': "New Form Submission",
                     'message_body': f"A new task was created via the '{form_template.title}' form.",

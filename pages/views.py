@@ -110,7 +110,7 @@ class PageViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] New Page Created: {page.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Documentation Page",
                 'message_body': f"A new page '{page.title}' has been created by {user.get_full_name()}.",
@@ -140,7 +140,7 @@ class PageViewSet(viewsets.ModelViewSet):
             send_notification_email(
                 subject=f"[{page.project.name}] Page Renamed: {page.title}",
                 recipients=recipients,
-                template_path="emails/generic_notification.html",
+                template_path="emails/notification.html",
                 context={
                     'title': "Page Renamed",
                     'message_body': f"The page '{old_title}' was renamed to '{page.title}'.",
@@ -171,7 +171,7 @@ class PageViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] Page Deleted: {page_title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Documentation Page Deleted",
                 'message_body': f"The page '{page_title}' has been permanently deleted.",
@@ -239,7 +239,7 @@ class PageViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{page.project.name}] Page Restored: {page.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Content Restored",
                 'message_body': f"The content of page '{page.title}' was restored to a previous version (v{version_num}).",
@@ -347,7 +347,7 @@ class PageViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{page.project.name}] File Attached: {page.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New File Attachment",
                 'message_body': f"A new file has been attached to page '{page.title}'.",
@@ -398,7 +398,7 @@ class PageViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{page.project.name}] Page Linked to Task-{task.id}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Page Linked to Task",
                 'message_body': f"The page '{page.title}' has been linked to task '{task.title}'.",

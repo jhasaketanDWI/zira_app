@@ -20,6 +20,7 @@ class SoftDeleteModel(models.Model):
         """Marks the instance as deleted."""
         self.is_deleted = True
         self.deleted_at = timezone.now()
+        self.is_active = False
         self.save()
 
     def restore(self):

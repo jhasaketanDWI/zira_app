@@ -1,178 +1,220 @@
-from django.shortcuts import render
-from rest_framework import viewsets, permissions
-from common.permissions import RBACPermission
+from rest_framework import viewsets, status
+from rest_framework.response import Response
+from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
-from .models import SubscriptionPlan, Subscription, Invoice
-from .serializers import SubscriptionPlanSerializer, SubscriptionSerializer, InvoiceSerializer
-from common.utils.email_service import send_notification_email
+from common.permissions import RBACPermission
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncMonth
+from django.contrib.auth import get_user_model
 from django.conf import settings
+from decimal import Decimal
 
+from .models import Subscription, Invoice, PricingConfig
+from .serializers import (
+    SubscriptionSerializer, 
+    InvoiceSerializer, 
+    PricingConfigSerializer, 
+    BillingReportSerializer
+)
+from common.utils.email_service import send_notification_email
 
-class SubscriptionPlanViewSet(viewsets.ModelViewSet):
+User = get_user_model()
+
+# --- Helper Function for Email Recipients ---
+def get_billing_notification_recipients(organization):
     """
-    API endpoint that allows subscription plans to be viewed or edited.
-    Only admin users can modify subscription plans.
+    Returns unique list of emails for:
+    1. Super Admins
+    2. Organization Owner
+    3. Organization Scrum Masters
     """
-    queryset = SubscriptionPlan.objects.all()
-    serializer_class = SubscriptionPlanSerializer
-    # Permissions are set to IsAdminUser, as typically only admins should manage plans.
-    permission_classes = [permissions.IsAdminUser]
+    recipients = set()
 
-    def perform_create(self, serializer):
-        # Save the user who created and updated the plan
-        serializer.save(created_by=self.request.user, updated_by=self.request.user)
+    # 1. Super Admins
+    super_admins = User.objects.filter(is_superuser=True).values_list('email', flat=True)
+    recipients.update(super_admins)
 
-    def perform_update(self, serializer):
-        # Update the user who modified the plan
-        serializer.save(updated_by=self.request.user)
+    if organization:
+        # 2. Organization Owner & Scrum Masters
+        org_users = User.objects.filter(
+            organization=organization,
+            role__in=['OWNER', 'SCRUM_MASTER']
+        ).values_list('email', flat=True)
+        recipients.update(org_users)
+
+    return [email for email in recipients if email]
 
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """
-    API endpoint that allows users to view and manage their own subscriptions.
+    Manages dynamic subscriptions.
+    - Admins: Can see/edit all.
+    - Owners/Scrum Masters: Can view and upgrade their own org's plan.
     """
     serializer_class = SubscriptionSerializer
     permission_classes = [IsAuthenticated, RBACPermission]
+    
     perms_map = {
-        # Viewing subscription details requires permission (usually Owner/Billing Admin)
-        'list': 'billing.can_manage_subscription',
-        'retrieve': 'billing.can_manage_subscription',
-
-        # Creating/Upgrading plans
-        'create': 'billing.can_manage_subscription',
-        'update': 'billing.can_manage_subscription',
-        'partial_update': 'billing.can_manage_subscription',
-
-        # Canceling subscription
-        'destroy': 'billing.can_manage_subscription',
+        'list': 'billing.view_subscription_plan',
+        'retrieve': 'billing.view_subscription_plan',
+        'create': 'billing.manage_subscription_plan',
+        'update': 'billing.manage_subscription_plan',
+        'partial_update': 'billing.manage_subscription_plan',
+        'destroy': 'billing.manage_subscription_plan',
     }
 
     def get_queryset(self):
-        """
-        This is a critical security correction.
-        It ensures that users can only view their own subscriptions and not anyone else's.
-        """
-        return Subscription.objects.filter(owner=self.request.user)
+        user = self.request.user
+        
+        # Optimize: Fetch related owner and organization
+        queryset = Subscription.objects.select_related('owner', 'owner__organization')
+
+        if user.is_superuser:
+            return queryset.all()
+        
+        # Return subscription for the user's organization
+        # Assuming one subscription per owner/org
+        return queryset.filter(owner__organization=user.organization)
 
     def perform_create(self, serializer):
-        # The owner is automatically set to the currently logged-in user.
-        subscription = serializer.save(
-            owner=self.request.user,
-            created_by=self.request.user,
-            updated_by=self.request.user,
-        )
-        # [EMAIL] New Subscription Started
-        send_notification_email(
-            subject=f"Welcome to {subscription.plan.name} Plan",
-            recipients=[self.request.user.email],
-            template_path="emails/generic_notification.html",
-            context={
-                'title': "Subscription Started",
-                'message_body': f"Thank you for subscribing to the {subscription.plan.name} plan.",
-                'details': {
-                    'Plan': subscription.plan.name,
-                    'Start Date': str(subscription.start_date),
-                    'End Date': str(subscription.end_date),
-                    'Status': subscription.status
-                },
-                'action_url': f"{settings.FRONTEND_URL}/billing/subscriptions"
-            }
-        )
+        # Create subscription
+        subscription = serializer.save(owner=self.request.user)
+        
+        # Send Email Notification
+        organization = subscription.owner.organization
+        recipients = get_billing_notification_recipients(organization)
+        
+        org_name = organization.name if organization else "Unknown Organization"
 
-    def perform_update(self, serializer):
-        subscription = serializer.save(updated_by=self.request.user)
-
-        # [EMAIL] Subscription Updated
         send_notification_email(
-            subject="Subscription Updated",
-            recipients=[self.request.user.email],
-            template_path="emails/generic_notification.html",
+            subject=f"New Subscription: {org_name}",
+            recipients=recipients,
+            template_path="emails/notification.html",
             context={
-                'title': "Subscription Plan Updated",
-                'message_body': "Your subscription details have been updated.",
+                'title': "Subscription Activated",
+                'message_body': f"A new {subscription.get_billing_cycle_display()} plan has been activated for {org_name}.",
                 'details': {
-                    'Current Plan': subscription.plan.name,
-                    'Status': subscription.status,
-                    'Updated By': self.request.user.get_full_name()
-                },
-                'action_url': f"{settings.FRONTEND_URL}/billing/subscriptions"
-            }
-        )
-
-    def perform_destroy(self, instance):
-        # [EMAIL] Subscription Cancelled
-        plan_name = instance.plan.name
-        send_notification_email(
-            subject="Subscription Cancelled",
-            recipients=[self.request.user.email],
-            template_path="emails/generic_notification.html",
-            context={
-                'title': "Subscription Cancelled",
-                'message_body': f"Your subscription to the {plan_name} plan has been cancelled.",
-                'details': {
-                    'Plan': plan_name,
-                    'Cancelled By': self.request.user.get_full_name()
+                    'Organization': org_name,
+                    'Plan': subscription.get_billing_cycle_display(),
+                    'Users Limit': subscription.selected_users,
+                    'Cost': f"${subscription.calculate_cost()}",
+                    'Action By': self.request.user.get_full_name()
                 },
                 'action_url': f"{settings.FRONTEND_URL}/billing"
             }
         )
-        instance.delete()
 
-
-class InvoiceViewSet(viewsets.ModelViewSet):
-    """
-    API endpoint that allows users to view invoices for their subscriptions.
-    """
-    serializer_class = InvoiceSerializer
-    permission_classes = [IsAuthenticated, RBACPermission]
-    perms_map = {
-        # Viewing invoices
-        'list': 'billing.can_view_all_invoices',
-        'retrieve': 'billing.can_view_all_invoices',
-
-        # Creating/Editing invoices is typically automated or Admin-only,
-        # but if exposed, it requires high-level billing permissions.
-        'create': 'billing.can_manage_subscription',
-        'update': 'billing.can_manage_subscription',
-        'partial_update': 'billing.can_manage_subscription',
-        'destroy': 'billing.can_manage_subscription',
-    }
-
-    def get_queryset(self):
-        """
-        This is another critical security correction.
-        It ensures users can only see invoices that belong to their subscriptions.
-        """
-        return Invoice.objects.filter(subscription__owner=self.request.user)
-
-    def perform_create(self, serializer):
-        # Use self.request.user for auditing
-        invoice = serializer.save(
-            created_by=self.request.user,
-            updated_by=self.request.user
-        )
-
-        # [EMAIL] New Invoice Generated
-        # Determine recipient from the related subscription owner
-        recipient_email = invoice.subscription.owner.email
+    def perform_update(self, serializer):
+        subscription = serializer.save()
+        
+        # Send Email Notification
+        organization = subscription.owner.organization
+        recipients = get_billing_notification_recipients(organization)
+        
+        org_name = organization.name if organization else "Unknown Organization"
 
         send_notification_email(
-            subject=f"New Invoice Available: #{invoice.id}",
-            recipients=[recipient_email],
-            template_path="emails/generic_notification.html",
+            subject=f"Plan Updated: {org_name}",
+            recipients=recipients,
+            template_path="emails/notification.html",
             context={
-                'title': "Invoice Generated",
-                'message_body': "A new invoice has been generated for your subscription.",
+                'title': "Subscription Updated",
+                'message_body': f"The subscription plan for {org_name} has been updated.",
                 'details': {
-                    'Invoice ID': f"#{invoice.id}",
-                    'Amount': f"${invoice.amount}",
-                    'Plan': invoice.subscription.plan.name,
-                    'Date': str(invoice.issue_date)
+                    'Organization': org_name,
+                    'New Plan': subscription.get_billing_cycle_display(),
+                    'New Limit': f"{subscription.selected_users} Users",
+                    'Updated By': self.request.user.get_full_name()
                 },
-                'action_url': f"{settings.FRONTEND_URL}/billing/invoices/{invoice.id}"
+                'action_url': f"{settings.FRONTEND_URL}/billing"
             }
         )
 
-    def perform_update(self, serializer):
-        # Use self.request.user for auditing
-        serializer.save(updated_by=self.request.user)
+
+class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only view for invoices.
+    """
+    serializer_class = InvoiceSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        qs = Invoice.objects.select_related('subscription', 'subscription__owner')
+        
+        if user.is_superuser:
+            return qs.all()
+        
+        return qs.filter(subscription__owner__organization=user.organization)
+
+
+class PricingConfigViewSet(viewsets.ModelViewSet):
+    """
+    Admin only: Configure global pricing.
+    """
+    queryset = PricingConfig.objects.all()
+    serializer_class = PricingConfigSerializer
+    permission_classes = [IsAuthenticated] 
+
+    def get_permissions(self):
+        # Only Superuser can edit pricing
+        if self.action in ['create', 'update', 'partial_update', 'destroy']:
+            # You might want a custom permission here like IsSuperUser
+            pass 
+        return super().get_permissions()
+
+
+class BillingReportsViewSet(viewsets.ViewSet):
+    """
+    Returns aggregated data for charts.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def list(self, request):
+        user = request.user
+        
+        # Filter invoices based on permissions
+        if user.is_superuser:
+            queryset = Invoice.objects.all()
+        else:
+            queryset = Invoice.objects.filter(subscription__owner__organization=user.organization)
+
+        # 1. GROUP BY MONTH
+        report_data = (
+            queryset
+            .annotate(month=TruncMonth('period_start'))
+            .values('month')
+            .annotate(
+                total_spend=Sum('amount'),
+                invoice_count=Count('id')
+            )
+            .order_by('month')
+        )
+        
+        # 2. PREPARE DATA
+        data_for_serializer = [
+            {
+                "month": entry['month'].strftime("%b %Y"),
+                "total_spend": entry['total_spend'],
+                "invoice_count": entry['invoice_count']
+            }
+            for entry in report_data
+        ]
+
+        # 3. SERIALIZE
+        serializer = BillingReportSerializer(data=data_for_serializer, many=True)
+        serializer.is_valid(raise_exception=True)
+        serialized_data = serializer.data
+        
+        # 4. SUMMARY CALCULATION (Use Decimal)
+        # item['total_spend'] comes as string from serializer, convert to Decimal
+        total_lifetime = sum(Decimal(str(item['total_spend'])) for item in serialized_data)
+        last_month = serialized_data[-1]['total_spend'] if serialized_data else 0
+        
+        return Response({
+            "chart_data": serialized_data,
+            "summary": {
+                "total_spent_lifetime": total_lifetime,
+                "last_month_spend": last_month
+            }
+        })

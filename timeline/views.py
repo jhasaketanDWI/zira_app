@@ -96,7 +96,7 @@ class EpicDateUpdateView(BaseDateUpdateView):
         send_notification_email(
             subject=f"[{epic.project.name}] Timeline Update: {epic.name}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Epic Timeline Updated",
                 'message_body': f"The timeline for Epic '{epic.name}' has been updated.",
@@ -133,7 +133,7 @@ class TaskDateUpdateView(BaseDateUpdateView):
         send_notification_email(
             subject=f"[{task.project.name}] Schedule Update: {task.title}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Task Rescheduled",
                 'message_body': f"The dates for task '{task.title}' have been updated via the timeline.",

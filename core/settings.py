@@ -30,6 +30,9 @@ MEDIA_URL = "/media/"
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-$cmg#q&j=bu096yk(6+a-1*1haq=m45kx3lcfr8miio!k_-a)x'
 
+# AI API key
+LAMA_API_KEY = "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"
+
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
@@ -45,6 +48,9 @@ EMAIL_HOST_PASSWORD = 'vtyu ookx ctth spbk'
 DEFAULT_FROM_EMAIL = 'jhasaketansa86@gmail.com'
 
 # EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+
+# FRONTEND_URL = 'https://kanban.dreamwaveinnovations.com/'
+FRONTEND_URL = 'http://localhost:5173'
 
 # Application definition
 

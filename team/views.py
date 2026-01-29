@@ -135,7 +135,7 @@ class TeamViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[New Team] {team_name} Created",
             recipients=list(admins),
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Team Created",
                 'message_body': f"A new team '{team_name}' has been created by {request.user.get_full_name()}.",
@@ -185,7 +185,7 @@ class TeamViewSet(viewsets.ModelViewSet):
             send_notification_email(
                 subject=f"Invitation to join Team: {team.name}",
                 recipients=[email],
-                template_path="emails/generic_notification.html",
+                template_path="emails/notification.html",
                 context={
                     'title': "Team Invitation",
                     'message_body': f"You have been invited to join the team '{team.name}'.",
@@ -256,7 +256,7 @@ class RespondToTeamInvitationView(APIView):
                 send_notification_email(
                     subject=f"[{membership.team.name}] Invitation Accepted: {request.user.get_full_name()}",
                     recipients=[membership.invited_by.email],
-                    template_path="emails/generic_notification.html",
+                    template_path="emails/notification.html",
                     context={
                         'title': "Invitation Accepted",
                         'message_body': f"{request.user.get_full_name()} has accepted your invitation to join '{membership.team.name}'.",

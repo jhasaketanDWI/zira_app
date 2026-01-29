@@ -47,7 +47,21 @@ class CurrentUserView(generics.RetrieveAPIView):
     An endpoint to get the details of the currently authenticated user.
     """
     serializer_class = UserSerializer
-    permission_classes = [IsAuthenticated] # Only logged-in users can access
+    permission_classes = [IsAuthenticated,RBACPermission] # Only logged-in users can access
+    perms_map = {
+        'list': 'user.can_view_all_users',
+        'retrieve': 'user.can_view_all_users',
+        'create': 'user.can_create_system_users',
+        'update': 'user.can_edit_users_info',
+        'partial_update': 'user.can_edit_users_info',
+        'destroy': 'user.can_delete_users',
+        
+        # Custom actions
+        'deactivate': 'user.can_edit_users_info', 
+        'activate': 'user.can_edit_users_info',
+        'reset_password': 'user.can_reset_passwords',
+    }
+
 
     def get_object(self):
         """
@@ -108,7 +122,7 @@ class UserViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject="Account Created",
             recipients=[user.email],
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Welcome to the System",
                 'message_body': f"An account has been created for you by {request.user.get_full_name()}.",
@@ -128,7 +142,7 @@ class UserViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject="Account Deactivated",
             recipients=[user.email],
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Account Deactivated",
                 'message_body': "Your account has been deactivated by an administrator. Please contact support if you believe this is an error.",
@@ -146,7 +160,7 @@ class UserViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject="Account Reactivated",
             recipients=[user.email],
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Account Active",
                 'message_body': "Your account has been reactivated. You may now log in.",
@@ -176,7 +190,20 @@ class OwnerSignupWithOrganizationView(APIView):
 
 class AdminUserViewSet(viewsets.ModelViewSet):
     queryset = User.objects.all()
-    permission_classes = [IsSuperAdminOrDjangoAdmin] # Only admins can access this viewset
+    permission_classes = [IsAuthenticated,RBACPermission]
+    perms_map = {
+        'list': 'user.can_view_all_users',
+        'retrieve': 'user.can_view_all_users',
+        'create': 'user.can_create_system_users',
+        'update': 'user.can_edit_users_info',
+        'partial_update': 'user.can_edit_users_info',
+        'destroy': 'user.can_delete_users',
+        
+        # Custom actions
+        'deactivate': 'user.can_edit_users_info', 
+        'activate': 'user.can_edit_users_info',
+        'reset_password': 'user.can_reset_passwords',
+    }
 
     def get_serializer_class(self):
         if self.action == 'create':
@@ -196,6 +223,7 @@ class AdminSignUpView(generics.CreateAPIView):
     """
     serializer_class = AdminSignUpSerializer
     permission_classes = [AllowAny]
+    
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -365,7 +393,7 @@ class UserSoftDeleteAPIView(generics.DestroyAPIView):
         send_notification_email(
             subject=f"[User Removed] {user_name} has left the organization",
             recipients=list(recipients),
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "User Removed",
                 'message_body': f"The user {user_name} ({user_email}) has been removed from the system.",
@@ -460,7 +488,7 @@ class InviteUserView(generics.CreateAPIView):
         send_notification_email(
             subject='You have been invited to join the Team',
             recipients=[invitation.email],
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Welcome!",
                 'message_body': f"Hello, you have been invited to join the platform by {self.request.user.get_full_name()}.",
@@ -541,7 +569,7 @@ class SetPasswordView(APIView):
         send_notification_email(
             subject=f"[New Member] {user_to_activate.get_full_name()} has joined!",
             recipients=list(all_active_users),
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Team Member",
                 'message_body': f"Please welcome {user_to_activate.get_full_name()} to the organization.",
@@ -671,17 +699,17 @@ class RoleViewSet(viewsets.ModelViewSet):
     serializer_class = RoleSerializer
     
     # default permission for standard CRUD is Admin Only
-    permission_classes = [IsSuperAdminOrDjangoAdmin]
+    # permission_classes = [IsAuthenticated]
 
-    def get_permissions(self):
-        """
-        Custom permissions:
-        - The 'invitable' action is accessible to any logged-in user (IsAuthenticated).
-        - Everything else (Create, Delete, List All) is restricted to Admins (IsSuperAdminOrDjangoAdmin).
-        """
-        if self.action == 'invitable':
-            return [IsAuthenticated()]
-        return [IsSuperAdminOrDjangoAdmin() or IsOwnerOrAdmin()]
+    # def get_permissions(self):
+    #     """
+    #     Custom permissions:
+    #     - The 'invitable' action is accessible to any logged-in user (IsAuthenticated).
+    #     - Everything else (Create, Delete, List All) is restricted to Admins (IsSuperAdminOrDjangoAdmin).
+    #     """
+    #     if self.action == 'invitable':
+    #         return [IsAuthenticated()]
+    #     return [IsSuperAdminOrDjangoAdmin() or IsOwnerOrAdmin()]
     
     @action(detail=False, methods=['get'], url_path='by-name')
     def get_by_name(self, request):

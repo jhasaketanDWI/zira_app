@@ -23,11 +23,8 @@ class TestTemplateSerializer(serializers.ModelSerializer):
     class Meta:
         model = TestTemplate
         fields = [
-            "id",
-            "project",
-            "name",
-            "description",
-            "is_active",
+            "id","project","name",
+            "description","is_active",
             "template_steps",
         ]
 
@@ -71,11 +68,35 @@ class TestCaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = QaTestCase
         fields = [
-            "id","suite","title","preconditions",
+            "id","title","preconditions",
             "expected_result","priority","natural_language",
-            "status","labels","severity","module","template","steps",
+            "status","labels","severity","module",
+            "created_by", "created_at","updated_by", "updated_at",
+            "template","steps",
         ]
+        read_only_fields = ["created_by","updated_by","created_at","updated_at",]
 
+    def validate(self, attrs):
+        module = attrs.get("module") or getattr(self.instance, "module", None)
+        title = attrs.get("title") or getattr(self.instance, "title", None)
+
+        # If module is not provided, skip validation
+        if not module or not title:
+            return attrs
+        qs = QaTestCase.objects.filter(
+            module=module,
+            title=title,  # case-sensitive by default
+        )
+        # Prevent self-match during update
+        if self.instance:
+            qs = qs.exclude(id=self.instance.id)
+
+        if qs.exists():
+            raise ValidationError({
+                "title": "A testcase with this name already exists in this module."
+            })
+        return attrs
+    
     def create(self, validated_data):
         steps_data = validated_data.pop("steps", [])
         template = validated_data.pop("template", None)
@@ -147,12 +168,74 @@ class SimpleTestCaseSerializer(serializers.ModelSerializer):
 
 
 class TestSuiteSerializer(serializers.ModelSerializer):
-    cases = TestCaseSerializer(many=True, read_only=True)
+    cases = serializers.SerializerMethodField()
+
+    case_ids = serializers.PrimaryKeyRelatedField(
+        queryset=QaTestCase.objects.all(),
+        many=True,
+        write_only=True,
+        required=False
+    )
 
     class Meta:
         model = TestSuite
-        fields = ["id", "module", "name", "description", "suite_type", "cases"]
+        fields = [
+            "id","project","name","description",
+            "suite_type","status","created_by","created_at",
+            "updated_by","updated_at","last_executed_on","cases","case_ids",
+        ]
+        read_only_fields = ["created_by","updated_by","created_at","updated_at","last_executed_on",]
+    def validate(self, attrs):
+        project = attrs.get("project") or getattr(self.instance, "project", None)
+        name = attrs.get("name") or getattr(self.instance, "name", None)
 
+        # case-sensitive
+        qs = TestSuite.objects.filter(project=project,name=name)
+        
+        # CRITICAL LINE (prevents self-matching during update)
+        if self.instance:
+            qs = qs.exclude(id=self.instance.id)
+        if qs.exists():
+            raise ValidationError({"name": "A suite with this name already exists in this project."})
+        return attrs
+    
+    def create(self, validated_data):
+        cases = validated_data.pop("case_ids", [])
+        suite = TestSuite.objects.create(**validated_data)
+        if cases:
+            suite.cases.set(cases)
+        return suite
+
+    def update(self, instance, validated_data):
+        cases = validated_data.pop("case_ids", None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+
+        if cases is not None:
+            instance.cases.set(cases)
+
+        return instance
+    def get_cases(self, obj):
+        """
+        Return testcases ordered by priority
+        """
+        priority_order = {
+            "HIGHEST": 1,
+            "HIGH": 2,
+            "MEDIUM": 3,
+            "LOW": 4,
+            "LOWEST": 5,
+        }
+
+        cases = obj.cases.all()
+        cases = sorted(
+            cases,
+            key=lambda c: priority_order.get(c.priority, 99)
+        )
+        return TestCaseSerializer(cases, many=True).data
+        
 class RecursiveModuleSerializer(serializers.Serializer):
     def to_representation(self, value):
         return ModuleSerializer(value, context=self.context).data
@@ -165,8 +248,8 @@ class ModuleSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Module
-        fields = ["id", "project", "parent", "name", "description", "created_by", "created_at", "testcases", "children"]
-        read_only_fields = ["created_by", "created_at"]
+        fields = ["id", "project", "parent", "name", "description", "created_by", "created_at",  "updated_at", "updated_by", "testcases", "children"]
+        read_only_fields = ["created_by","updated_by","created_at","updated_at",]
     
     def validate(self, data):
         """
@@ -180,8 +263,7 @@ class ModuleSerializer(serializers.ModelSerializer):
             # Check the parent module's project against the new module's project
             # 'parent_module' is an instance of Module model at this point,
             # and 'new_module_project' is an instance of RootProject model.
-            
-            # parent_module.project is a RootProject instance (from the FK relationship)
+            # parent_module.project is a RootProject instance.
             if parent_module.project != new_module_project:
                 raise ValidationError({
                     "parent": "The parent module must belong to the same project specified for the new module."

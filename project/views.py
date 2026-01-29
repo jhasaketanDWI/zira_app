@@ -64,7 +64,7 @@ class ProjectViewSet(viewsets.ModelViewSet):
 
     @transaction.atomic
     def perform_create(self, serializer):
-        manager_to_assign = serializer.validated_data.get('MANAGER ')
+        manager_to_assign = serializer.validated_data.get('MANAGER')
 
         # 1. Save the Project (Creator becomes the Project Owner)
         creator = self.request.user
@@ -159,13 +159,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[New Project] {project.name} launched",
             recipients=list(all_users),
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Project Created",
                 'message_body': f"A new project '{project.name}' has been created by {creator.get_full_name()}.",
                 'details': {
                     'Project Name': project.name,
-                    'Key': project.key,
+                    'Key': project.id,
                     'Owner': creator.get_full_name()
                 },
                 'action_url': f"{settings.FRONTEND_URL}/projects/{project.id}"
@@ -336,7 +336,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] Welcome {member.user.get_full_name()}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "New Team Member Added",
                 'message_body': f"{member.user.get_full_name()} has joined the project team.",
@@ -399,7 +399,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             send_notification_email(
                 subject=f"[{project.name}] {len(new_members)} New Members Added",
                 recipients=recipients,
-                template_path="emails/generic_notification.html",
+                template_path="emails/notification.html",
                 context={
                     'title': "Team Members Added",
                     'message_body': f"The following users have been added to the project as {role_to_assign}s:",
@@ -480,7 +480,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             send_notification_email(
                 subject=f"Invitation to join project: {project.name}",
                 recipients=[email_to_invite],
-                template_path="emails/generic_notification.html",
+                template_path="emails/notification.html",
                 context={
                     'title': "You have been invited!",
                     'message_body': f"Hello {existing_user.first_name}, you have been invited to join the project '{project.name}'.",
@@ -528,7 +528,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
             send_notification_email(
                 subject=f"Welcome! Invitation to join project: {project.name}",
                 recipients=[email_to_invite],
-                template_path="emails/generic_notification.html",
+                template_path="emails/notification.html",
                 context={
                     'title': "Welcome to the Team",
                     'message_body': f"You have been invited to join '{project.name}'. Please activate your account.",
@@ -661,7 +661,7 @@ class ProjectMemberViewSet(viewsets.ModelViewSet):
         send_notification_email(
             subject=f"[{project.name}] Member Removed: {user_name}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Team Member Removed",
                 'message_body': f"{user_name} ({user_email}) has been removed from the project.",
@@ -803,7 +803,7 @@ class AcceptProjectInvitationView(APIView):
         send_notification_email(
             subject=f"[{invitation.project.name}] New Member Joined: {request.user.get_full_name()}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Team Member Joined",
                 'message_body': f"{request.user.get_full_name()} has accepted the invitation and joined the project.",
@@ -861,7 +861,7 @@ class ActivateAndSetPasswordView(APIView):
         send_notification_email(
             subject=f"[{invitation.project.name}] New Member Activated: {user.get_full_name()}",
             recipients=recipients,
-            template_path="emails/generic_notification.html",
+            template_path="emails/notification.html",
             context={
                 'title': "Team Member Activated",
                 'message_body': f"{user.get_full_name()} has set their password and is now active in the project.",
