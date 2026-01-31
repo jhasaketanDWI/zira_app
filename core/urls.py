@@ -51,10 +51,10 @@ api_patterns = [
     path('', include(pages_router.urls)),
 
 
- # ✨ Task & Forms: /projects/{id}/forms/, /projects/{id}/tasks/, etc.
+ # Task & Forms: /projects/{id}/forms/, /projects/{id}/tasks/, etc.
     path('', include(task_nested_router.urls)),
     
-    # ✨ Tickets: /projects/{id}/sprints/{id}/tickets/
+    # Tickets: /projects/{id}/sprints/{id}/tickets/
     path('', include(sprints_nested_router.urls)),
 
 

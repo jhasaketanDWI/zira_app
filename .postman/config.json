@@ -1,0 +1,16 @@
+{
+  "workspace": {
+    "id": ""
+  },
+  "entities": {
+    "environments": [],
+    "flows": [],
+    "globals": [],
+    "mocks": [],
+    "specs": [],
+    "collections": [
+      "..\\Test-app.postman_collection.json",
+      "..\\TestApp-Organizations.postman_collection.json"
+    ]
+  }
+}

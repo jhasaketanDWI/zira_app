@@ -3,18 +3,23 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated
 from common.permissions import RBACPermission
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Prefetch
 from django.db.models.functions import TruncMonth
 from django.contrib.auth import get_user_model
 from django.conf import settings
 from decimal import Decimal
+from rest_framework.views import APIView
+from organizations.models import Organization
+from organizations.permissions import IsSuperAdmin
+
 
 from .models import Subscription, Invoice, PricingConfig
 from .serializers import (
     SubscriptionSerializer, 
     InvoiceSerializer, 
     PricingConfigSerializer, 
-    BillingReportSerializer
+    BillingReportSerializer,
+    AllOrgBillingSummarySerializer
 )
 from common.utils.email_service import send_notification_email
 
@@ -43,7 +48,6 @@ def get_billing_notification_recipients(organization):
         recipients.update(org_users)
 
     return [email for email in recipients if email]
-
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """
@@ -217,4 +221,74 @@ class BillingReportsViewSet(viewsets.ViewSet):
                 "total_spent_lifetime": total_lifetime,
                 "last_month_spend": last_month
             }
+        })
+
+class SuperAdminBillingDashboardView(APIView):
+    """
+    Aggregates billing data across ALL organizations.
+    Endpoint: /api/billing/admin/dashboard/
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request):
+        users_prefetch = Prefetch(
+            'users',
+            queryset=User.objects.order_by('id').prefetch_related('subscriptions')
+        )
+
+        orgs = Organization.objects.annotate(
+            user_count=Count('users')
+        ).prefetch_related(users_prefetch).order_by('-created_at')
+
+        serializer = AllOrgBillingSummarySerializer(orgs, many=True)
+        serialized_data = serializer.data
+
+        total_revenue = sum(float(item['amount']) for item in serialized_data if item['status'] == 'Active')
+        total_active_subs = sum(1 for item in serialized_data if item['status'] == 'Active')
+        total_orgs = len(serialized_data)
+
+        return Response({
+            "summary": {
+                "total_monthly_revenue": total_revenue,
+                "active_subscriptions": total_active_subs,
+                "total_organizations": total_orgs
+            },
+            "organizations": serialized_data
+        })
+
+class SuperAdminOrganizationDetailsView(APIView):
+    """
+    Fetches detailed billing info and invoice history for a SINGLE organization.
+    Endpoint: /api/billing/admin/organizations/<int:org_id>/
+    """
+    permission_classes = [IsAuthenticated, IsSuperAdmin]
+
+    def get(self, request, org_id):
+        # 1. Fetch Org with annotations (needed for AllOrgBillingSummarySerializer)
+        users_prefetch = Prefetch(
+            'users',
+            queryset=User.objects.order_by('id').prefetch_related('subscriptions')
+        )
+        
+        try:
+            org = Organization.objects.annotate(
+                user_count=Count('users', distinct=True),
+                testcase_count=Count('projects__testcases', distinct=True)
+            ).prefetch_related(users_prefetch).get(pk=org_id)
+        except Organization.DoesNotExist:
+            return Response({"error": "Organization not found"}, status=status.HTTP_404_NOT_FOUND)
+
+        # 2. Fetch Invoices for this Org
+        # Logic: Invoices -> Subscription -> Owner -> Organization
+        invoices = Invoice.objects.filter(
+            subscription__owner__organization=org
+        ).order_by('-period_start')
+
+        # 3. Serialize Data
+        summary_serializer = AllOrgBillingSummarySerializer(org)
+        invoice_serializer = InvoiceSerializer(invoices, many=True)
+
+        return Response({
+            "details": summary_serializer.data,
+            "invoices": invoice_serializer.data
         })
