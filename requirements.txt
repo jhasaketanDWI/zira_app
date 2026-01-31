@@ -13,3 +13,5 @@ pytz
 markdown
 bleach
 celery
+openpyxl
+groq
