@@ -96,19 +96,31 @@ class ProjectSerializer(serializers.ModelSerializer):
         help_text="ID of the user (with a global 'MANAGER' role) to be assigned as the Project Manager upon creation."
     )
     organization = OrganizationSerializer(read_only=True)
+    organization_name = serializers.CharField(
+        source="organization.name",
+        read_only=True
+    )
     class Meta:
         model = Project
-        fields = ["id", "name", "description", "status", "organization", "owner", "project_manager_id", "created_at", "updated_at"]
+        fields = ["id", "name", "description", "status", "organization", "organization_name", "owner", "project_manager_id", "created_at", "updated_at"]
         read_only_fields = ["owner"]
 
     def create(self, validated_data):
         request = self.context.get("request")
         validated_data.pop('project_manager', None)
 
-        # Organization is derived, never from payload
-        validated_data["organization"] = request.user.organization
+        organization = request.user.organization
 
-        return super().create(validated_data)
+        if (
+                getattr(request.user, "role", None) == "OWNER"
+                and organization is None
+        ):
+            raise serializers.ValidationError(
+                "Owner must belong to an organization before creating a project."
+            )
+
+        validated_data["organization"] = organization
+        return Project.objects.create(**validated_data)
 
     def validate_owner(self, value):
         """

@@ -13,11 +13,13 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 import os
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
 
 
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / '.env')
 
 # Media configuration
 MEDIA_ROOT = BASE_DIR / "media"
@@ -28,7 +30,7 @@ MEDIA_URL = "/media/"
 # See https://docs.djangoproject.com/en/5.2/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-$cmg#q&j=bu096yk(6+a-1*1haq=m45kx3lcfr8miio!k_-a)x'
+SECRET_KEY = '+django-insecure-$cmg#q&j=bu096yk(6+a-1*1haq=m45kx3lcfr8miio!k_-a)x'
 
 # AI API key
 LAMA_API_KEY = "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"
@@ -78,6 +80,7 @@ INSTALLED_APPS = [
     'timeline',
     'pages',
     'organizations',
+    'reports',
 
 
     # Allauth apps
@@ -169,10 +172,10 @@ WSGI_APPLICATION = 'core.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.mysql',
-        'NAME': 'jira_app',
-        'HOST': 'localhost',
-        'USER': 'root',
-        'PASSWORD': 'Deepak@2025',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
     }
 }
 

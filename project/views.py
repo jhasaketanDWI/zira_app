@@ -69,6 +69,13 @@ class ProjectViewSet(viewsets.ModelViewSet):
         # 1. Save the Project (Creator becomes the Project Owner)
         creator = self.request.user
 
+        if (
+                getattr(self.request.user, "role", None) == "OWNER"
+                and self.request.user.organization is None
+        ):
+            raise PermissionDenied(
+                "Owner must belong to an organization before creating a project."
+            )
         # Assign project to creator's organization
         project = serializer.save(
             owner=creator,

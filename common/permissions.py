@@ -10,10 +10,14 @@ class RBACPermission(permissions.BasePermission):
     based on the 'perms_map' defined in the ViewSet.
     """
     def has_permission(self, request, view):
-        # 1. Allow Superusers and Project Owners to bypass RBAC checks completely
-        if request.user.is_superuser:
+        # SUPER ADMIN: full access
+        if getattr(request.user, 'is_super_admin', False):
             return True
+
         if getattr(request.user, 'role', '') == 'OWNER':
+            # OWNER must belong to an organization to mutate org-scoped data
+            if request.user.organization is None:
+                return False
             return True
 
         # 2. Get the permission map from the ViewSet
