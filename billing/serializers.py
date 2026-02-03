@@ -83,3 +83,90 @@ class BillingReportSerializer(serializers.Serializer):
     month = serializers.CharField()
     total_spend = serializers.DecimalField(max_digits=12, decimal_places=2)
     invoice_count = serializers.IntegerField()
+
+class SubscriptionUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Subscription
+        fields = ['selected_users', 'selected_storage_gb', 'selected_testcases', 'billing_cycle']
+
+    def validate(self, data):
+        # Reuse the validation logic from SubscriptionSerializer
+        subscription_serializer = SubscriptionSerializer(instance=self.instance, data=data, partial=True)
+        subscription_serializer.is_valid(raise_exception=True)
+        return data
+
+class AllOrgBillingSummarySerializer(serializers.Serializer):
+    """
+    Flattens Organization + Subscription data for the Super Admin Billing Dashboard.
+    """
+    org_id = serializers.IntegerField(source='id')
+    org_name = serializers.CharField(source='name')
+    domain = serializers.CharField()
+    owner_email = serializers.SerializerMethodField()
+    
+    # Subscription Details
+    plan_name = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+    renewal_date = serializers.SerializerMethodField()
+    amount = serializers.SerializerMethodField()
+    
+    # Usage Stats
+    users_used = serializers.IntegerField(source='user_count', read_only=True)
+    users_limit = serializers.SerializerMethodField()
+    storage_limit = serializers.SerializerMethodField()
+    testcases_used = serializers.SerializerMethodField()
+    testcases_limit = serializers.SerializerMethodField()
+
+    def get_owner_email(self, obj):
+        # Efficiently found via prefetch in the View
+        owner = next((u for u in obj.users.all() if u.role == 'OWNER'), None)
+        return owner.email if owner else "No Owner"
+
+    def _get_active_sub(self, obj):
+        # Helper to find the active subscription for this org's owner
+        owner = next((u for u in obj.users.all() if u.role == 'OWNER'), None)
+        if owner and hasattr(owner, 'subscriptions'):
+            # Return the last active, or just the last created one
+            return next((s for s in owner.subscriptions.all() if s.is_active), None)
+        return None
+
+    def get_plan_name(self, obj):
+        sub = self._get_active_sub(obj)
+        return sub.get_billing_cycle_display() if sub else "No Plan"
+
+    def get_status(self, obj):
+        sub = self._get_active_sub(obj)
+        if not sub: return "No Subscription"
+        return "Active" if sub.is_active else "Inactive"
+
+    def get_renewal_date(self, obj):
+        sub = self._get_active_sub(obj)
+        return sub.end_date if sub else None
+
+    def get_amount(self, obj):
+        sub = self._get_active_sub(obj)
+        return sub.calculate_cost() if sub else 0.00
+
+    def get_users_limit(self, obj):
+        sub = self._get_active_sub(obj)
+        return sub.selected_users if sub else 5 # Default free limit
+
+    def get_storage_limit(self, obj):
+        sub = self._get_active_sub(obj)
+        return sub.selected_storage_gb if sub else 10 # Default free limit
+    
+    def get_testcases_limit(self, obj):
+        """
+        Returns the purchased testcase limit from the subscription.
+        Defaults to 500 (Base limit) if no subscription exists.
+        """
+        sub = self._get_active_sub(obj)
+        # Assuming 'selected_testcases' is the field name in your Subscription model
+        return sub.selected_testcases if sub else 500 
+
+    def get_testcases_used(self, obj):
+        """
+        Returns the number of testcases used.
+        Ideally, this comes from an annotation 'testcase_count' in the View.
+        """
+        return getattr(obj, 'testcase_count', 0)

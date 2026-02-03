@@ -5,7 +5,9 @@ from .views import (
     SubscriptionViewSet,
     InvoiceViewSet,
     PricingConfigViewSet,    
-    BillingReportsViewSet    
+    BillingReportsViewSet,
+    SuperAdminBillingDashboardView,
+    SuperAdminOrganizationDetailsView,
 )
 
 router = DefaultRouter()
@@ -16,5 +18,10 @@ router.register(r'config', PricingConfigViewSet, basename='pricing-config')
 router.register(r'reports', BillingReportsViewSet, basename='billing-reports')
 
 urlpatterns = [
-    path('', include(router.urls)),
+    path('admin/subscriptions/dashboard/', SuperAdminBillingDashboardView.as_view(), name='admin-billing-dashboard'),
+    path('admin/subscriptions/organizations/<int:org_id>/', SuperAdminOrganizationDetailsView.as_view(), name='admin-org-billing-details'),
+
+    
+    path('billing/', include(router.urls)),
+    
 ]

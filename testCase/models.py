@@ -179,6 +179,7 @@ class QaTestCase(AuditBaseModel):
         related_name='testcases',
         null=True,blank=True
     )
+    project = models.ForeignKey(Project, related_name="testcases", on_delete=models.CASCADE, null=True, blank=True)
 
     # optional: an NLP/scriptless description field
     natural_language = models.TextField(blank=True)
