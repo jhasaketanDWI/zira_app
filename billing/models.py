@@ -26,6 +26,36 @@ class PricingConfig(AuditBaseModel):
     def __str__(self):
         return "Current Pricing Configuration"
 
+class DiscountCode(AuditBaseModel):
+    """
+    Discount coupons that can be applied to Subscriptions.
+    Adapted from user request to fit AuditBaseModel.
+    """
+    DISCOUNT_TYPES = [
+        ('PERCENT', 'Percentage'),
+        ('FIXED', 'Fixed Amount')
+    ]
+
+    code = models.CharField(max_length=20, unique=True)
+    discount_type = models.CharField(max_length=10, choices=DISCOUNT_TYPES)
+    discount_value = models.DecimalField(max_digits=10, decimal_places=2)
+    expiry_date = models.DateTimeField()
+    usage_limit = models.PositiveIntegerField(default=1)
+    used_count = models.PositiveIntegerField(default=0)
+    
+
+    def is_valid(self):
+        """Check if the discount code is still valid."""
+        return self.used_count < self.usage_limit and self.expiry_date > timezone.now()
+
+    def use_code(self):
+        """Increment the usage count when applied successfully."""
+        self.used_count += 1
+        self.save()
+
+    def __str__(self):
+        return f"{self.code} ({self.get_discount_type_display()} - {self.discount_value})"
+
 class Subscription(AuditBaseModel):
     BILLING_CYCLE_CHOICES = [
         ('MONTHLY', 'Monthly'),
@@ -46,39 +76,44 @@ class Subscription(AuditBaseModel):
     is_active = models.BooleanField(default=True)
     price_at_activation = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
+    applied_discount = models.ForeignKey(DiscountCode, on_delete=models.SET_NULL, null=True, blank=True)
+
     def calculate_cost(self):
         """
-        Calculates the monthly/yearly cost based on current PricingConfig.
-        Uses Decimal for financial precision.
+        Calculates cost based on config AND applied discount.
         """
         config = PricingConfig.objects.first()
-        # Fallback defaults if no config exists (Safety)
         if not config: 
             return Decimal('0.00')
 
-        # Convert inputs to Decimal
+        # 1. Base Cost Calculation
         user_cost = Decimal(self.selected_users) * config.price_per_user
         storage_cost = Decimal(self.selected_storage_gb) * config.price_per_gb
         
-        # Testcases are sold in units (e.g., per 500)
-        # Avoid float division: (Total / Step) * Price
         units = Decimal(self.selected_testcases) / Decimal(config.testcase_unit_step)
         testcase_cost = units * config.price_per_testcase_unit
 
-        monthly_total = user_cost + storage_cost + testcase_cost
+        subtotal = user_cost + storage_cost + testcase_cost
 
         if self.billing_cycle == 'YEARLY':
-            # 1 Month discount for yearly
-            return (monthly_total * Decimal('11')).quantize(Decimal("0.01"))
+            subtotal = subtotal * Decimal('11') # 1 month free discount
         
-        return monthly_total.quantize(Decimal("0.01"))
+        # 2. Apply Discount Code Logic
+        if self.applied_discount and self.applied_discount.is_valid():
+            if self.applied_discount.discount_type == 'PERCENT':
+                discount_amount = subtotal * (self.applied_discount.discount_value / Decimal('100'))
+            else: # FIXED
+                discount_amount = self.applied_discount.discount_value
+            
+            subtotal = subtotal - discount_amount
+        
+        # Ensure non-negative
+        return max(Decimal('0.00'), subtotal.quantize(Decimal("0.01")))
 
     def save(self, *args, **kwargs):
-        # Ensure start_date is a date object
         if isinstance(self.start_date, datetime.datetime):
             self.start_date = self.start_date.date()
             
-        # Auto-set end_date if it's a new record
         if not self.pk:
             if self.billing_cycle == 'FREE_TRIAL':
                 self.end_date = self.start_date + relativedelta(months=4)
@@ -87,20 +122,40 @@ class Subscription(AuditBaseModel):
             else:
                 self.end_date = self.start_date + relativedelta(months=1)
                 
-        # Snapshot the price if activating
         if self.is_active and not self.price_at_activation:
             self.price_at_activation = self.calculate_cost()
             
         super().save(*args, **kwargs)
 
 class Invoice(AuditBaseModel):
-    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE)
+    subscription = models.ForeignKey(Subscription, on_delete=models.CASCADE, related_name='invoices')
     amount = models.DecimalField(max_digits=10, decimal_places=2)
     period_start = models.DateField()
     period_end = models.DateField()
     is_paid = models.BooleanField(default=False)
-    # Optional: Add transaction_id for future payment gateway integration
     transaction_id = models.CharField(max_length=100, null=True, blank=True)
 
     def __str__(self):
         return f"Invoice #{self.id} - {self.amount}"
+
+class Payment(AuditBaseModel):
+    """
+    Records a payment attempt for a specific Invoice.
+    Adapted from user request.
+    """
+    STATUS_CHOICES = [
+        ('PENDING', 'Pending'),
+        ('SUCCESS', 'Success'),
+        ('FAILED', 'Failed')
+    ]
+
+    invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='payments')
+    amount_paid = models.DecimalField(max_digits=10, decimal_places=2)
+    payment_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    transaction_id = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    payment_id = models.AutoField(primary_key=True)
+
+    
+   
+    def __str__(self):
+        return f"Payment {self.id} - {self.payment_status}"

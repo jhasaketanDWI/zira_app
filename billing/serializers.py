@@ -1,24 +1,44 @@
 from rest_framework import serializers
-from .models import Subscription, PricingConfig, Invoice
+from .models import Subscription, PricingConfig, Invoice, DiscountCode, Payment
 from decimal import Decimal
+
+class DiscountCodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DiscountCode
+        fields = ['id', 'code', 'discount_type', 'discount_value', 'expiry_date', 'usage_limit', 'used_count']
+        read_only_fields = ['used_count']
+
+class PaymentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Payment
+        fields = ['id', 'invoice', 'amount_paid', 'payment_status', 'transaction_id', 'created_at']
+        read_only_fields = ['created_at']
 
 class SubscriptionSerializer(serializers.ModelSerializer):
     owner = serializers.PrimaryKeyRelatedField(read_only=True)
     total_price = serializers.SerializerMethodField()
     formatted_status = serializers.SerializerMethodField()
 
+    discount_code_str = serializers.CharField(write_only=True, required=False, allow_blank=True)
+    applied_discount = DiscountCodeSerializer(read_only=True)
+
     class Meta:
         model = Subscription
         fields = [
             'id', 'owner', 'selected_users', 'selected_storage_gb', 
             'selected_testcases', 'billing_cycle', 'start_date', 
-            'end_date', 'is_active', 'total_price', 'formatted_status'
+            'end_date', 'is_active', 'total_price', 'formatted_status','discount_code_str', 'applied_discount'
         ]
         read_only_fields = ['start_date', 'end_date', 'is_active', 'price_at_activation']
 
     def get_total_price(self, obj):
         return obj.calculate_cost()
-    
+    # def get_formatted_status(self, obj):
+    #     if not obj.is_active: 
+    #         return "Pending Payment"  # Or "Inactive"
+    #     if obj.billing_cycle == 'FREE_TRIAL':
+    #         return "Free Trial"
+    #     return "Active Premium"
     def get_formatted_status(self, obj):
         if not obj.is_active: return "Inactive"
         return "Free Trial" if obj.billing_cycle == 'FREE_TRIAL' else "Active Premium"
@@ -56,6 +76,30 @@ class SubscriptionSerializer(serializers.ModelSerializer):
              raise serializers.ValidationError({"selected_testcases": f"Testcases must increase by {config.testcase_unit_step}."})
 
         return data
+    def create(self, validated_data):
+        code_str = validated_data.pop('discount_code_str', None)
+        discount = None
+        if code_str:
+            discount = DiscountCode.objects.get(code=code_str)
+            # We don't increment usage here, we do it upon Payment success usually, 
+            # or here if it's applied immediately to a subscription logic.
+            # For simplicity, we'll increment when the Subscription is saved active.
+            
+        instance = super().create(validated_data)
+        if discount:
+            instance.applied_discount = discount
+            instance.save()
+        return instance
+
+    def update(self, instance, validated_data):
+        code_str = validated_data.pop('discount_code_str', None)
+        instance = super().update(instance, validated_data)
+        
+        if code_str:
+            discount = DiscountCode.objects.get(code=code_str)
+            instance.applied_discount = discount
+            instance.save()
+        return instance
 
 class InvoiceSerializer(serializers.ModelSerializer):
     class Meta:

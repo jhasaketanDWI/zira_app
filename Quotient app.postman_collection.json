@@ -161,13 +161,12 @@
                   }
                 },
                 "url": {
-                  "raw": "{{baseUrl}}/auth/login/",
+                  "raw": "{{baseUrl}}/token/",
                   "host": [
                     "{{baseUrl}}"
                   ],
                   "path": [
-                    "auth",
-                    "login",
+                    "token",
                     ""
                   ]
                 }
@@ -3411,6 +3410,14 @@
                 }
               },
               "response": []
+            },
+            {
+              "name": "buy a plan",
+              "request": {
+                "method": "GET",
+                "header": []
+              },
+              "response": []
             }
           ],
           "description": "Managing active plans. Uses {{user_token}}."
@@ -3478,6 +3485,176 @@
             }
           ],
           "description": "Invoices and Charts. Uses {{user_token}}."
+        },
+        {
+          "name": "payment",
+          "item": [
+            {
+              "name": "1. Create Subscription",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.environment.set(\"sub_id\", jsonData.id);",
+                      "pm.test(\"Subscription created with correct price\", function () {",
+                      "    pm.expect(jsonData.total_price).to.eql(64.00);",
+                      "});"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"selected_users\": 10,\n    \"selected_storage_gb\": 50,\n    \"selected_testcases\": 2000,\n    \"billing_cycle\": \"MONTHLY\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/billing/subscriptions/",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "billing",
+                    "subscriptions",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "2. Get Auto-Generated Invoice",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "// Filter invoices for the subscription we just created",
+                      "var myInvoice = jsonData.find(inv => inv.subscription === pm.environment.get(\"sub_id\"));",
+                      "pm.environment.set(\"invoice_id\", myInvoice.id);",
+                      "pm.test(\"Invoice Found\", function () { pm.expect(myInvoice).to.be.an('object'); });"
+                    ],
+                    "type": "text/javascript"
+                  }
+                }
+              ],
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{base_url}}/billing/invoices/",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "billing",
+                    "invoices",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "3. Create Cashfree Order",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "var jsonData = pm.response.json();",
+                      "pm.environment.set(\"order_id\", jsonData.order_id);",
+                      "console.log(\"Follow this link to pay: \" + jsonData.payment_link);"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"invoice_id\": {{invoice_id}}\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/billing/create-order/",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "billing",
+                    "create-order",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            },
+            {
+              "name": "4. Verify Payment & Activate",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "exec": [
+                      "pm.test(\"Status is Success\", function () {",
+                      "    pm.expect(pm.response.json().status).to.eql(\"success\");",
+                      "});"
+                    ],
+                    "type": "text/javascript",
+                    "packages": {},
+                    "requests": {}
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n    \"order_id\": \"{{order_id}}\"\n}",
+                  "options": {
+                    "raw": {
+                      "language": "json"
+                    }
+                  }
+                },
+                "url": {
+                  "raw": "{{base_url}}/billing/verify-order/",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "billing",
+                    "verify-order",
+                    ""
+                  ]
+                }
+              },
+              "response": []
+            }
+          ]
         }
       ],
       "description": "Admin-only endpoints for managing subscription plans."

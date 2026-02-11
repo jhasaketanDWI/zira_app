@@ -1,0 +1,45 @@
+Environment Setup Steps (Django Project)
+
+Install django-environ package.
+
+Create a .env file in the project root directory (same level as manage.py).
+
+Add all required environment variables inside the .env file (SECRET_KEY, DEBUG, DB credentials, Email, Google OAuth, Cashfree, etc.).
+
+Add .env to .gitignore.
+
+Install MySQL and create the database.
+
+Install MySQL driver (mysqlclient).
+
+Configure Gmail App Password for SMTP.
+
+Create Google OAuth credentials in Google Cloud Console.
+
+Run makemigrations.
+
+Run migrate.
+
+Start the Django server using runserver.
+
+
+SECRET_KEY=
+DEBUG=
+
+LAMA_API_KEY=
+
+CASHFREE_APP_ID=
+CASHFREE_SECRET_KEY=
+CASHFREE_API_URL=
+FRONTEND_URL=
+
+EMAIL_HOST_USER=
+EMAIL_HOST_PASSWORD=
+
+DB_NAME=
+DB_USER=
+DB_PASSWORD=
+DB_HOST=
+
+GOOGLE_CLIENT_ID=
+GOOGLE_SECRET=

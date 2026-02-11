@@ -1,6 +1,6 @@
 from rest_framework import viewsets, status
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated
 from common.permissions import RBACPermission
 from django.db.models import Sum, Count, Prefetch
@@ -11,15 +11,25 @@ from decimal import Decimal
 from rest_framework.views import APIView
 from organizations.models import Organization
 from organizations.permissions import IsSuperAdmin
+from django.shortcuts import get_object_or_404
+from django.db import transaction
+from django.utils import timezone
+import requests
+from django.core.files.storage import FileSystemStorage
+import os
+from django.core.mail import EmailMessage
 
 
-from .models import Subscription, Invoice, PricingConfig
+
+from .models import Subscription, Invoice, PricingConfig, DiscountCode, Payment
 from .serializers import (
     SubscriptionSerializer, 
     InvoiceSerializer, 
     PricingConfigSerializer, 
     BillingReportSerializer,
-    AllOrgBillingSummarySerializer
+    AllOrgBillingSummarySerializer,
+    DiscountCodeSerializer,
+    PaymentSerializer
 )
 from common.utils.email_service import send_notification_email
 
@@ -48,6 +58,264 @@ def get_billing_notification_recipients(organization):
         recipients.update(org_users)
 
     return [email for email in recipients if email]
+
+
+
+# --- Cashfree Payment Logic ---
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def create_cashfree_order(request):
+    """
+    Initiates a Cashfree order for a specific Invoice.
+    """
+    try:
+        data = request.data
+        invoice_id = data.get("invoice_id")
+        
+        invoice = get_object_or_404(Invoice, pk=invoice_id)
+        user = request.user
+
+        # Ensure user owns this subscription
+        if invoice.subscription.owner != user:
+             return Response({"error": "Unauthorized access to invoice"}, status=403)
+
+        # Ensure amount matches invoice amount
+        total_amount = invoice.amount 
+        total_amount = Decimal(total_amount).quantize(Decimal('0.01'))
+
+        if total_amount <= 0:
+            return Response({"error": "Invalid invoice amount"}, status=400)
+
+        # Generate unique order ID
+        order_id = f"ORD_{timezone.now().strftime('%Y%m%d%H%M%S')}_{user.id}_{invoice.id}"
+
+        headers = {
+            "Content-Type": "application/json",
+            "x-client-id": settings.CASHFREE_APP_ID,
+            "x-client-secret": settings.CASHFREE_SECRET_KEY,
+            "x-api-version": "2022-01-01"
+        }
+        payload = {
+            "order_id": order_id,
+            "order_amount": float(total_amount),  
+            "order_currency": "INR",
+            "customer_details": {
+                "customer_id": str(user.id),
+                "customer_name": user.get_full_name() or user.email,
+                "customer_email": user.email,
+                "customer_phone": getattr(user, 'phone', '9999999999'), # Fallback
+            },
+            "order_meta": {
+                "return_url": f"{settings.FRONTEND_URL}/billing/redirecting?order_id={{order_id}}"
+            }
+        }
+
+        response = requests.post(settings.CASHFREE_API_URL, json=payload, headers=headers)
+        response_data = response.json()
+
+        if "payment_link" in response_data:
+            # Create a pending Payment record
+            Payment.objects.create(
+            invoice=invoice,
+            amount_paid=total_amount,  # Correct field name from models.py
+            payment_status="PENDING",
+            transaction_id=order_id,
+            created_by=user
+        )
+            return Response({"payment_link": response_data["payment_link"], "order_id": order_id})
+
+        return Response({"error": "Failed to create payment order", "details": response_data}, status=400)
+
+    except Exception as e:
+        print("Error:", str(e))
+        return Response({"error": "An internal error occurred"}, status=500)
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def verify_cashfree_order(request):
+    """
+    Verifies payment status with Cashfree after redirect.
+    """
+    data = request.data
+    order_id = data.get("order_id")
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-client-id": settings.CASHFREE_APP_ID,
+        "x-client-secret": settings.CASHFREE_SECRET_KEY,
+        "x-api-version": "2022-01-01"
+    }
+
+    # IMPORTANT: Use the same environment (sandbox/prod) as creation
+    # Extract base URL from settings or hardcode logic
+    base_url = settings.CASHFREE_API_URL.replace("/pg/orders", "") 
+    verify_url = f"{base_url}/pg/orders/{order_id}"
+    
+    response = requests.get(verify_url, headers=headers)
+    response_data = response.json()
+
+    payment = Payment.objects.filter(transaction_id=order_id).first()
+
+    if not payment:
+        return Response({"error": "Payment record not found"}, status=404)
+
+    order_status = response_data.get("order_status")
+
+    if order_status == "PAID":
+        payment.payment_status = "SUCCESS"
+        # Store actual CF payment ID if available
+        # payment.transaction_id = response_data.get("cf_payment_id", payment.transaction_id) 
+        payment.save()
+
+        # Update Invoice
+        invoice = payment.invoice
+        invoice.is_paid = True
+        invoice.transaction_id = order_id
+        invoice.save()
+
+        # Update Subscription Status
+        sub = invoice.subscription
+        sub.is_active = True
+        
+        # Handle Discount Usage Count
+        if sub.applied_discount and sub.applied_discount.is_valid():
+            sub.applied_discount.use_code()
+            
+        sub.save()
+            # serializer = SubscriptionSerializer(sub)
+            # return Response(serializer.data)
+
+        return Response({"status": "success", "message": "Payment verified and subscription active"})
+
+    elif order_status in ["FAILED", "EXPIRED", "CANCELLED"]:
+        payment.payment_status = "FAILED"
+        payment.save()
+        return Response({"status": "failed", "message": "Payment not successful"})
+
+    return Response({"status": "pending", "message": "Payment still pending"})
+
+
+class DiscountCodeViewSet(viewsets.ModelViewSet):
+    """
+    CRUD for Discount Codes. 
+    Only Admin/SuperUser should be able to create/list all.
+    Users can 'retrieve' to check validity via a specific action if needed.
+    """
+    queryset = DiscountCode.objects.all()
+    serializer_class = DiscountCodeSerializer
+    permission_classes = [IsAuthenticated, IsSuperAdmin] 
+
+    @action(detail=False, methods=['post'], permission_classes=[IsAuthenticated])
+    def validate_code(self, request):
+        """
+        Public endpoint for users to check if a code is valid before purchasing.
+        """
+        code = request.data.get('code')
+        try:
+            discount = DiscountCode.objects.get(code=code)
+            if discount.is_valid():
+                return Response({
+                    "valid": True,
+                    "type": discount.discount_type,
+                    "value": discount.discount_value
+                })
+            else:
+                return Response({"valid": False, "error": "Code expired or limit reached."}, status=400)
+        except DiscountCode.DoesNotExist:
+            return Response({"valid": False, "error": "Invalid code."}, status=404)
+
+# class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
+#     """
+#     Handle Payments.
+#     """
+#     queryset = Payment.objects.all()
+#     serializer_class = PaymentSerializer
+#     permission_classes = [IsAuthenticated]
+
+#     def create(self, request, *args, **kwargs):
+#         """
+#         Manual payment recording (simulated).
+#         """
+#         invoice_id = request.data.get('invoice')
+#         amount_paid = request.data.get('amount_paid')
+        
+#         invoice = get_object_or_404(Invoice, pk=invoice_id)
+        
+#         # Verify ownership
+#         if not request.user.is_super_admin and invoice.subscription.owner.organization != request.user.organization:
+#              return Response({"error": "Not authorized for this invoice"}, status=403)
+
+#         with transaction.atomic():
+#             # 1. Create Payment
+#             payment_data = {
+#                 'invoice': invoice.id,
+#                 'amount_paid': amount_paid,
+#                 'payment_status': 'SUCCESS', # Assuming direct success for this API
+#                 'transaction_id': request.data.get('transaction_id')
+#             }
+#             serializer = self.get_serializer(data=payment_data)
+#             serializer.is_valid(raise_exception=True)
+#             payment = serializer.save()
+
+#             # 2. Update Invoice
+#             invoice.is_paid = True
+#             invoice.transaction_id = payment.transaction_id
+#             invoice.save()
+
+#             # 3. Handle Discount Usage if applicable
+#             sub = invoice.subscription
+#             if sub.applied_discount and sub.applied_discount.is_valid():
+#                 sub.applied_discount.use_code()
+
+#             # 4. Activate Subscription if strictly waiting for payment
+#             # (Logic depends on if you activate on creation or payment)
+            
+#             return Response(serializer.data, status=status.HTTP_201_CREATED)
+class PaymentViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Read-only view for user payments history.
+    """
+    serializer_class = PaymentSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_super_admin:
+            return Payment.objects.all()
+        return Payment.objects.filter(invoice__subscription__owner__organization=user.organization)
+
+    @action(detail=False, methods=['post'])
+    def send_invoice_email(self, request):
+        """
+        Sends an invoice PDF via email.
+        Expected Payload: { 'email': '...', 'file': (binary) }
+        """
+        email = request.data.get('email')
+        pdf_file = request.FILES.get('file')
+
+        if not email or not pdf_file:
+            return Response({'message': 'Email and file are required'}, status=400)
+
+        # Save the file temporarily
+        fs = FileSystemStorage(location=settings.MEDIA_ROOT)
+        filename = fs.save(f"invoices/{pdf_file.name}", pdf_file)
+        full_file_path = fs.path(filename)
+
+        try:
+            subject = 'Your Invoice from Jira Clone'
+            message = 'Please find attached the invoice for your recent payment.'
+            from_email = settings.EMAIL_HOST_USER
+
+            email_message = EmailMessage(subject, message, from_email, [email])
+            email_message.attach_file(full_file_path)
+            email_message.send()
+            
+            # Cleanup
+            os.remove(full_file_path)
+            return Response({'message': 'Email sent successfully'})
+        except Exception as e:
+            return Response({'message': f'Failed to send email: {str(e)}'}, status=500)
 
 class SubscriptionViewSet(viewsets.ModelViewSet):
     """
@@ -81,58 +349,37 @@ class SubscriptionViewSet(viewsets.ModelViewSet):
         return queryset.filter(owner__organization=user.organization)
 
     def perform_create(self, serializer):
-        # Create subscription
         subscription = serializer.save(owner=self.request.user)
-        
-        # Send Email Notification
-        organization = subscription.owner.organization
-        recipients = get_billing_notification_recipients(organization)
-        
-        org_name = organization.name if organization else "Unknown Organization"
-
-        send_notification_email(
-            subject=f"New Subscription: {org_name}",
-            recipients=recipients,
-            template_path="emails/notification.html",
-            context={
-                'title': "Subscription Activated",
-                'message_body': f"A new {subscription.get_billing_cycle_display()} plan has been activated for {org_name}.",
-                'details': {
-                    'Organization': org_name,
-                    'Plan': subscription.get_billing_cycle_display(),
-                    'Users Limit': subscription.selected_users,
-                    'Cost': f"${subscription.calculate_cost()}",
-                    'Action By': self.request.user.get_full_name()
-                },
-                'action_url': f"{settings.FRONTEND_URL}/billing"
-            }
-        )
+        self._send_notification(subscription, "Subscription Activated")
 
     def perform_update(self, serializer):
         subscription = serializer.save()
-        
-        # Send Email Notification
+        self._send_notification(subscription, "Subscription Updated")
+
+    def _send_notification(self, subscription, title):
         organization = subscription.owner.organization
         recipients = get_billing_notification_recipients(organization)
-        
         org_name = organization.name if organization else "Unknown Organization"
 
         send_notification_email(
-            subject=f"Plan Updated: {org_name}",
+            subject=f"{title}: {org_name}",
             recipients=recipients,
             template_path="emails/notification.html",
             context={
-                'title': "Subscription Updated",
-                'message_body': f"The subscription plan for {org_name} has been updated.",
+                'title': title,
+                'message_body': f"Subscription for {org_name} has been processed.",
                 'details': {
                     'Organization': org_name,
-                    'New Plan': subscription.get_billing_cycle_display(),
+                    'Plan': subscription.get_billing_cycle_display(),
                     'New Limit': f"{subscription.selected_users} Users",
-                    'Updated By': self.request.user.get_full_name()
+                    'Updated By': self.request.user.get_full_name(),
+                    'Cost': f"${subscription.calculate_cost()}",
+                    'Discount': subscription.applied_discount.code if subscription.applied_discount else "None"
                 },
                 'action_url': f"{settings.FRONTEND_URL}/billing"
             }
         )
+
 
 
 class InvoiceViewSet(viewsets.ReadOnlyModelViewSet):
